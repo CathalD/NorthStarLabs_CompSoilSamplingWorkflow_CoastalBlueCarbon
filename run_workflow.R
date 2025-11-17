@@ -396,6 +396,36 @@ if (ENABLE_ICVCM_CCP_ASSESSMENT && file.exists("11_icvcm_ccp_assessment.R")) {
   tryCatch({
     source("11_icvcm_ccp_assessment.R")
     log_message("Module 11 completed successfully")
+
+    # Generate HTML report if assessment completed
+    if (file.exists("11b_icvcm_ccp_html_report.R") &&
+        file.exists("outputs/reports/icvcm_ccp_scorecard.csv")) {
+      cat("\n[Module 11b] Generating ICVCM CCP HTML Report\n")
+      log_message("Starting Module 11b: ICVCM CCP HTML Report")
+
+      tryCatch({
+        source("11b_icvcm_ccp_html_report.R")
+        log_message("Module 11b completed successfully")
+      }, error = function(e) {
+        log_message(sprintf("Module 11b failed: %s", e$message), "WARNING")
+        cat("  WARNING: HTML report generation failed.\n")
+      })
+    }
+
+    # Generate pre-verification checklist
+    if (file.exists("11c_icvcm_pre_verification_checklist.R")) {
+      cat("\n[Module 11c] ICVCM Pre-Verification Checklist\n")
+      log_message("Starting Module 11c: Pre-Verification Checklist")
+
+      tryCatch({
+        source("11c_icvcm_pre_verification_checklist.R")
+        log_message("Module 11c completed successfully")
+      }, error = function(e) {
+        log_message(sprintf("Module 11c failed: %s", e$message), "WARNING")
+        cat("  WARNING: Pre-verification checklist failed.\n")
+      })
+    }
+
   }, error = function(e) {
     log_message(sprintf("Module 11 failed: %s", e$message), "WARNING")
     cat("  WARNING: ICVCM CCP assessment failed. Continuing workflow.\n")

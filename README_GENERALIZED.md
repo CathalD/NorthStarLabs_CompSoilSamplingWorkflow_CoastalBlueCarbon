@@ -521,11 +521,14 @@ source("run_workflow.R")
 
 ### Outputs
 
-Assessment generates three key reports in `outputs/reports/`:
+Assessment generates comprehensive reports in `outputs/reports/`:
 
 1. **icvcm_ccp_scorecard.csv** - Complete assessment of all 10 principles
 2. **icvcm_gap_analysis.csv** - Identifies principles requiring attention
 3. **icvcm_action_plan.csv** - Prioritized actions with timelines
+4. **icvcm_ccp_assessment_report.html** - Professional HTML report with visualizations ⭐ NEW
+5. **icvcm_pre_verification_checklist.csv** - Detailed 45+ item checklist ⭐ NEW
+6. **icvcm_pre_verification_summary.txt** - Verification readiness summary ⭐ NEW
 
 ### Interpreting Results
 
