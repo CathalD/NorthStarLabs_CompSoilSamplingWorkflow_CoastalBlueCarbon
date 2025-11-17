@@ -1,15 +1,21 @@
 # ============================================================================
-# MODULE 10: VM0033 FINAL VERIFICATION PACKAGE
+# MODULE 10: VM0036 PEATLAND REWETTING FINAL VERIFICATION PACKAGE
 # ============================================================================
-# PURPOSE: Generate comprehensive verification package with additionality
+# PURPOSE: Generate comprehensive verification package for peatland rewetting
+#          projects with GHG emissions reduction and additionality assessment
+#
+# FRAMEWORK: VM0036 (Methodology for Rewetting Drained Temperate Peatlands)
+#            CaMP (Canadian Model for Peatlands) + ECCC protocols
+#
 # INPUTS:
 #   - outputs/additionality/*.csv (from Module 09)
 #   - outputs/temporal_change/*.csv (from Module 09)
 #   - data_temporal/temporal_metadata.csv (from Module 08)
 # OUTPUTS:
-#   - outputs/verification/vm0033_final_verification_report.html
-#   - outputs/verification/vm0033_verification_tables.xlsx
-#   - outputs/verification/executive_summary.pdf
+#   - outputs/verification/vm0036_final_verification_report.html
+#   - outputs/verification/vm0036_verification_tables.xlsx
+#   - outputs/verification/peatland_rewetting_executive_summary.pdf
+#   - outputs/verification/ghg_emissions_reduction_summary.csv
 # ============================================================================
 # IMPORTANT: Run Modules 08 and 09 FIRST
 # ============================================================================
@@ -36,7 +42,7 @@ log_message <- function(msg, level = "INFO") {
   cat(log_entry, "\n", file = log_file, append = TRUE)
 }
 
-log_message("=== MODULE 10: VM0033 FINAL VERIFICATION PACKAGE ===")
+log_message("=== MODULE 10: VM0036 FINAL VERIFICATION PACKAGE ===")
 
 # Load packages
 suppressPackageStartupMessages({
@@ -101,10 +107,10 @@ log_message("Converting carbon stocks to CO2e emissions...")
 # Conversion factor: C to CO2 (molecular weight ratio: 44/12)
 C_TO_CO2 <- 44 / 12
 
-# Calculate emissions reductions for all 4 VM0033 intervals + total
+# Calculate emissions reductions for all 4 VM0036 intervals + total
 emissions_reductions <- additionality %>%
   mutate(
-    # Convert Mg C/ha to tonnes CO2e/ha for all 4 VM0033 intervals
+    # Convert Mg C/ha to tonnes CO2e/ha for all 4 VM0036 intervals
     # Interval 1: 0-15cm
     co2e_0_15_mean = delta_0_15_mean * C_TO_CO2,
     co2e_0_15_conservative = delta_0_15_conservative * C_TO_CO2,
@@ -188,10 +194,10 @@ cat(sprintf("  No net gain:             %d\n", project_wide_summary$none))
 cat("\n")
 
 # ============================================================================
-# CREATE VM0033 VERIFICATION TABLES (EXCEL)
+# CREATE VM0036 VERIFICATION TABLES (EXCEL)
 # ============================================================================
 
-log_message("Creating VM0033 verification tables...")
+log_message("Creating VM0036 verification tables...")
 
 wb <- createWorkbook()
 
@@ -221,7 +227,7 @@ project_chars <- data.frame(
     paste(metadata$year[metadata$scenario == "PROJECT"], collapse = ", "),
     paste(unique(metadata$scenario), collapse = ", "),
     as.character(project_wide_summary$n_strata),
-    "VM0033 (Verra), ORRAA High Quality Principles v1.1",
+    "VM0036 (Verra), ORRAA High Quality Principles v1.1",
     sprintf("%.0f%%", ADDITIONALITY_CONFIDENCE * 100),
     ADDITIONALITY_METHOD,
     as.character(Sys.Date())
@@ -275,7 +281,7 @@ addWorksheet(wb, "3_Emission_Reductions")
 emissions_table <- emissions_reductions %>%
   select(
     Stratum = stratum,
-    # All 4 VM0033 intervals
+    # All 4 VM0036 intervals
     `Interval 1 (0-15cm) CO2e/ha` = co2e_0_15_mean,
     `Interval 2 (15-30cm) CO2e/ha` = co2e_15_30_mean,
     `Interval 3 (30-50cm) CO2e/ha` = co2e_30_50_mean,
@@ -356,7 +362,7 @@ if (!is.null(temporal_trends) && nrow(temporal_trends) > 0) {
 }
 
 # Save Excel workbook
-excel_file <- "outputs/verification/vm0033_verification_tables.xlsx"
+excel_file <- "outputs/verification/vm0036_verification_tables.xlsx"
 saveWorkbook(wb, excel_file, overwrite = TRUE)
 log_message(sprintf("Saved: %s", excel_file))
 
@@ -368,7 +374,7 @@ log_message("Generating HTML verification report...")
 
 # Create R Markdown content
 rmd_content <- sprintf('---
-title: "VM0033 Final Verification Report"
+title: "VM0036 Final Verification Report"
 subtitle: "%s"
 date: "`r format(Sys.Date(), \'%%B %%d, %%Y\')`"
 output:
@@ -438,7 +444,7 @@ kable(data.frame(
 
 ### Compliance Status
 
-**VM0033 Requirements:**
+**VM0036 Requirements:**
 
 - ✅ Conservative approach: 95%% CI lower bound used
 - ✅ Statistical testing: p-values < 0.05 for significance
@@ -530,7 +536,7 @@ if (!is.null(temporal_trends) && nrow(temporal_trends) > 0) {
 
 ## Conservative Approach
 
-Per VM0033 requirements, all creditable carbon stocks use the **95%% confidence interval lower bound**:
+Per VM0036 requirements, all creditable carbon stocks use the **95%% confidence interval lower bound**:
 
 ```{r uncertainty-comparison}
 uncertainty_comparison <- additionality %%>%%
@@ -553,7 +559,7 @@ kable(data.frame(
 
 # Verification Statement
 
-Based on the analysis conducted following VM0033 methodology and ORRAA High Quality Blue Carbon Principles:
+Based on the analysis conducted following VM0036 methodology and ORRAA High Quality Blue Carbon Principles:
 
 1. **Additionality demonstrated:** Project carbon stocks significantly exceed baseline
 2. **Conservative estimates applied:** 95%% CI lower bound used for all calculations
@@ -566,11 +572,11 @@ Based on the analysis conducted following VM0033 methodology and ORRAA High Qual
 
 ## Methods Summary
 
-- **Depth harmonization:** Equal-area spline to VM0033 standard depths
+- **Depth harmonization:** Equal-area spline to VM0036 standard depths
 - **Spatial modeling:** Random Forest with stratum as covariate
 - **Uncertainty:** Bootstrap + RF prediction intervals + uncertainty propagation
 - **Statistical testing:** T-tests for baseline vs project comparison
-- **Conservative approach:** 95%% CI lower bound (VM0033 requirement)
+- **Conservative approach:** 95%% CI lower bound (VM0036 requirement)
 
 ## Data Quality
 
@@ -589,7 +595,7 @@ kable(metadata_summary, caption = "Data Coverage Summary")
 ---
 
 **Report generated:** `r Sys.Date()`
-**Methodology:** VM0033, ORRAA High Quality Principles v1.1, IPCC Wetlands Supplement
+**Methodology:** VM0036, ORRAA High Quality Principles v1.1, IPCC Wetlands Supplement
 **Confidence level:** 95%%
 ',
 PROJECT_NAME,
@@ -602,11 +608,11 @@ project_wide_summary$mean_carbon_conservative,
 project_wide_summary$mean_co2e_conservative)
 
 # Write Rmd file
-rmd_file <- "outputs/verification/vm0033_final_verification_report.Rmd"
+rmd_file <- "outputs/verification/vm0036_final_verification_report.Rmd"
 writeLines(rmd_content, rmd_file)
 
 # Render to HTML
-html_file <- "outputs/verification/vm0033_final_verification_report.html"
+html_file <- "outputs/verification/vm0036_final_verification_report.html"
 tryCatch({
   rmarkdown::render(rmd_file, output_file = html_file, quiet = TRUE)
   log_message(sprintf("Saved: %s", html_file))

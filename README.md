@@ -1,9 +1,10 @@
-# 🌊 Blue Carbon Composite Sampling & MMRV Workflow
+# 🌿 Canadian Peatland Carbon Assessment & MRV Workflow
 
-**A comprehensive R-based workflow for coastal blue carbon monitoring, reporting, and verification (MMRV) compliant with VM0033, ORRAA, IPCC, and Canadian standards.**
+**A comprehensive R-based workflow for peatland carbon monitoring, reporting, and verification (MRV) compliant with VM0036, CaMP, IPCC Wetlands Supplement, and ECCC Canadian standards.**
 
-[![VM0033 Compliant](https://img.shields.io/badge/VM0033-Compliant-brightgreen)]()
-[![ORRAA](https://img.shields.io/badge/ORRAA-High%20Quality-blue)]()
+[![VM0036 Compliant](https://img.shields.io/badge/VM0036-Compliant-brightgreen)]()
+[![CaMP Framework](https://img.shields.io/badge/CaMP-NRCan-blue)]()
+[![IPCC Wetlands](https://img.shields.io/badge/IPCC-2013%20Supplement-orange)]()
 [![License](https://img.shields.io/badge/license-MIT-orange)]()
 
 ---
@@ -28,31 +29,37 @@
 
 ## 🎯 Overview
 
-This workflow provides a **complete analytical pipeline** for coastal blue carbon stock assessment in tidal wetlands, salt marshes, and seagrass ecosystems. Designed for **carbon credit development and verification** under the Verra VM0033 methodology.
+This workflow provides a **complete analytical pipeline** for Canadian peatland carbon stock assessment in bogs, fens, marshes, swamps, and treed peatlands. Designed for **carbon credit development and peatland restoration verification** under the Verra VM0036 methodology and Canada's CaMP (Canadian Model for Peatlands) framework.
 
-**Target Ecosystems:** Salt marshes, tidal wetlands, seagrass beds, mangroves
-**Geographic Focus:** Coastal British Columbia, Canada (adaptable globally)
-**Carbon Pools:** Soil organic carbon (0-100 cm depth)
+**Target Ecosystems:** Ombrotrophic bogs, minerotrophic fens, treed peatlands, marshes, swamps
+**Geographic Focus:** Canadian boreal and temperate regions (adaptable to other peatland regions)
+**Carbon Pools:** Peat organic carbon (0-300 cm depth to mineral soil)
+**Key Parameters:** Water table depth, peat type (fibric/hemic/sapric), von Post scale, pH
 
 **Use Cases:**
-- Carbon credit project development (VM0033)
-- Baseline carbon stock assessment
-- Restoration monitoring (temporal change detection)
-- Additionality verification (PROJECT vs. BASELINE)
+- Carbon credit project development (VM0036 peatland rewetting)
+- Peatland restoration monitoring and verification
+- Baseline carbon stock assessment (drained vs. intact peatlands)
+- GHG emissions reduction quantification
+- Additionality verification (DRAINED baseline vs. REWETTED project)
 
 ---
 
 ## ⭐ Key Features
 
-✅ **VM0033 Compliant** - Conservative estimates, stratum-specific calculations, 95% confidence intervals
+✅ **VM0036 Compliant** - Peatland rewetting methodology with conservative estimates, 95% confidence intervals
+✅ **CaMP Framework Integration** - Aligned with Canadian Model for Peatlands (NRCan)
+✅ **Extended Depth Profiling** - 0-300 cm peat cores (acrotelm + deep catotelm)
+✅ **Peatland-Specific QC** - pH (3.0-8.0), von Post scale (H1-H10), water table depth validation
 ✅ **Multi-Method Spatial Prediction** - Random Forest (stratum-aware) and Ordinary Kriging
-✅ **Bayesian Prior Integration** - SoilGrids + regional data via Google Earth Engine
-✅ **Depth Harmonization** - True equal-area spline to VM0033 standard depths (0-15, 15-30, 30-50, 50-100 cm)
-✅ **Comprehensive QA/QC** - Automated flagging, cross-validation, uncertainty quantification
-✅ **Standards Compliance Checking** - Automated assessment against 4 major standards
-✅ **Actionable Recommendations** - Data-driven guidance on additional sampling needs
-✅ **Temporal Analysis** - Baseline vs. project scenario comparisons with additionality calculation
-✅ **Full MMRV Reporting** - HTML verification packages, Excel tables, spatial exports
+✅ **Bayesian Prior Integration** - SoilGrids + regional peatland data via Google Earth Engine
+✅ **Depth Harmonization** - Equal-area spline to peatland depths (0-30, 30-100, 100-200, 200-300 cm)
+✅ **Comprehensive QA/QC** - Automated flagging for peat properties, cross-validation, uncertainty quantification
+✅ **Standards Compliance Checking** - Automated assessment against VM0036, CaMP, IPCC, ECCC standards
+✅ **Water Table Monitoring** - Critical VM0036 parameter for rewetting verification
+✅ **Actionable Recommendations** - Data-driven guidance on sampling and restoration effectiveness
+✅ **Temporal Analysis** - Drained vs. rewetted comparisons with GHG emissions reduction quantification
+✅ **Full MRV Reporting** - HTML verification packages, Excel tables, spatial exports for peatland projects
 
 ---
 
