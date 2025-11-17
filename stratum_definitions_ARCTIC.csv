@@ -1,0 +1,11 @@
+stratum_name,gee_file,stratum_code,description,restoration_type,baseline_vs_project,age_years,bulk_density_default,active_layer_depth_cm,permafrost_status
+Polygonal Tundra - Wet Center,polygonal_tundra_wet.tif,1,Ice-wedge polygon centers with high water table and organic accumulation,intact_permafrost,reference,NA,0.15,60,intact
+Polygonal Tundra - Dry Rim,polygonal_tundra_rim.tif,2,Elevated polygon rims with better drainage and mineral influence,intact_permafrost,reference,NA,0.20,70,intact
+Palsa Peatland,palsa_peatland.tif,3,Elevated permafrost peat mounds with low moisture and fibric peat,intact_permafrost,baseline,NA,0.10,40,intact
+Thermokarst Fen,thermokarst_fen.tif,4,Collapsed permafrost features with high water table and decomposed peat,degrading_permafrost,baseline,NA,0.20,100,degrading
+Subarctic Fen,subarctic_fen.tif,5,Permafrost-free minerotrophic wetland with moderate organic accumulation,none,project,NA,0.12,150,absent
+Tundra Pond Margin,tundra_pond.tif,6,Emergent vegetation around thermokarst ponds,degrading_permafrost,baseline,NA,0.18,80,degrading
+Intact Permafrost Peatland,intact_peatland.tif,7,Reference site with stable permafrost and organic accumulation,intact_permafrost,reference,NA,0.12,50,intact
+Degrading Permafrost Peatland,degrading_peatland.tif,8,Active permafrost thaw with subsidence and altered hydrology,degrading_permafrost,baseline,NA,0.16,120,degrading
+Polygon Center - Vegetated,polygon_center_veg.tif,9,Low-center polygons with sedge/moss vegetation,intact_permafrost,reference,NA,0.14,65,intact
+Bare Mineral Tundra,bare_mineral.tif,10,Exposed mineral soil with minimal organic layer,none,baseline,NA,1.20,90,variable
