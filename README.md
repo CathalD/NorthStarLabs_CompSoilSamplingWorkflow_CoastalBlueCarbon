@@ -699,6 +699,289 @@ Overall mean reduction: 26.1%
 
 ---
 
+## PART 5: Downstream Impacts & Wider Co-Benefits (NEW!)
+
+**🎯 Purpose:** Quantify restoration benefits beyond carbon sequestration
+**🛠️ Platform:** R + Google Earth Engine
+**⏱️ When to use:** To demonstrate comprehensive ecosystem service improvements for stakeholders, funders, and comprehensive MRV
+
+### Overview
+
+Part 5 extends the Blue Carbon MRV workflow to model **downstream impacts** of wetland restoration, including:
+
+- 💧 **Water quality improvement** (sediment & nutrient load reduction)
+- 🌊 **Flood mitigation** (peak flow reduction, groundwater recharge)
+- 🐟 **Habitat connectivity** (biodiversity spillover effects)
+- 💰 **Ecosystem service valuation** (co-benefits in CAD$)
+- 📊 **Uncertainty bounds** (Monte Carlo propagation for credible impact ranges)
+
+**Why model downstream impacts?**
+- Wetland restoration benefits extend far beyond the restoration site
+- Downstream communities benefit from improved water quality and flood protection
+- Quantifying co-benefits strengthens project value proposition
+- Required for comprehensive impact reporting to funders and regulators
+
+### Module 11: Downstream Impacts Analysis
+
+**File:** `11_downstream_impacts.R`
+
+**What it does:**
+Orchestrates a multi-step analysis pipeline that:
+1. Delineates upstream catchments for points of interest (POIs)
+2. Routes sediment and nutrients from source to receptor
+3. Estimates flood mitigation and water quality improvements
+4. Propagates uncertainty using Monte Carlo simulation
+5. Values ecosystem services in economic terms
+
+**Modeling approaches:**
+
+| Impact Type | Method | Key Output |
+|------------|--------|------------|
+| **Sediment export** | RUSLE + NDR delivery ratio | Tonnes/yr sediment reduction |
+| **Nutrient loads (N, P)** | Export coefficients + NDR routing | kg/yr nutrient reduction |
+| **Flood mitigation** | Curve Number method | m³/s peak flow reduction |
+| **Habitat connectivity** | Graph theory / circuit models | Connectivity index change |
+| **Uncertainty** | Monte Carlo (1000 iterations) | 95% confidence intervals |
+| **Valuation** | Avoided cost + benefit transfer | CAD$ annual & NPV |
+
+**Data requirements:**
+
+📁 **Required:**
+- Digital Elevation Model (DEM) - `data_raw/hydrology/dem.tif` (from GEE)
+- Points of Interest (POIs) - `data_raw/poi/points_of_interest.csv`
+- Stratum masks - `data_raw/gee_strata/` (from Module 00A)
+- Restoration intervention map - `outputs/predictions/restoration_mask.tif`
+
+📁 **Optional (improves accuracy):**
+- Rainfall erosivity raster - `data_raw/hydrology/rainfall_erosivity.tif`
+- Stream gauge data for validation
+- Field water quality measurements
+
+**How to prepare data:**
+
+**Step 1: Export DEM from Google Earth Engine**
+```javascript
+// In GEE Code Editor
+// Load and run: GEE_EXPORT_HYDROLOGY_DATA.js
+
+// 1. Define your study area
+var studyArea = ee.Geometry.Rectangle([-123.76, 49.14, -123.73, 49.16]);
+
+// 2. Run script → creates export tasks
+// 3. Click "Tasks" → "RUN" for each task
+// 4. Download from Google Drive → "BlueCarbon_Hydrology" folder
+// 5. Place files in data_raw/hydrology/
+```
+
+**Step 2: Create Points of Interest (POIs)**
+```csv
+# data_raw/poi/points_of_interest.csv
+poi_id,poi_name,longitude,latitude,receptor_type,priority
+1,Community Water Intake,-123.7500,49.1500,community_water_intake,1
+2,Salmon Habitat,-123.7400,49.1520,fish_habitat,1
+3,Shellfish Area,-123.7550,49.1480,shellfish_area,2
+```
+
+**Receptor types:**
+- `community_water_intake` - drinking water sources
+- `fish_habitat` - critical salmon/fish spawning areas
+- `shellfish_area` - commercial/traditional shellfish harvesting
+- `recreation_site` - beaches, boat launches
+- `agricultural_intake` - irrigation water sources
+- `drinking_water_source` - wells, intakes
+
+**Step 3: Create restoration mask** (if not already created)
+```r
+# Binary raster: 1 = restored pixels, 0 = other
+# Create from stratum changes or manual digitization
+# Save as: outputs/predictions/restoration_mask.tif
+```
+
+**Step 4: Configure parameters**
+
+Edit `blue_carbon_config.R`:
+```r
+# Enable downstream impacts
+ENABLE_DOWNSTREAM_IMPACTS <- TRUE
+
+# Select which impacts to model
+IMPACTS_ENABLED <- list(
+  nutrient_loads = TRUE,        # N and P reduction
+  sediment_loads = TRUE,        # Sediment/turbidity
+  peak_flow = TRUE,             # Flood mitigation
+  habitat_connectivity = TRUE,  # Biodiversity
+  ecosystem_services = TRUE     # Economic valuation
+)
+
+# Customize parameters for your region
+RUSLE_R_DEFAULT <- 500  # Rainfall erosivity (BC coast typical: 300-800)
+CURVE_NUMBERS <- ...    # Adjust for your ecosystem types
+```
+
+**Run the analysis:**
+```r
+# Configure project first
+source("blue_carbon_config.R")
+
+# Run full downstream impact analysis
+source("11_downstream_impacts.R")
+
+# Or run individual modules:
+source("modules/downstream/delineate_catchments.R")
+source("modules/downstream/sediment_export.R")
+source("modules/downstream/nutrient_ndr.R")
+source("modules/downstream/peakflow_cn.R")
+source("modules/downstream/uncertainty.R")
+```
+
+**Outputs:**
+
+```
+outputs/downstream/
+├── tables/
+│   ├── catchment_stats.csv                      # Catchment areas and restoration coverage
+│   ├── sediment_reduction_by_poi.csv            # Sediment loads avoided (t/yr)
+│   ├── nutrient_reduction_by_poi.csv            # N & P loads avoided (kg/yr)
+│   ├── flood_mitigation_by_poi.csv              # Peak flow reduction (m³/s)
+│   ├── uncertainty_intervals_by_metric.csv      # 95% CI for all metrics
+│   ├── sensitivity_analysis.csv                 # Parameter importance ranking
+│   └── ecosystem_service_valuation.csv          # Economic value (CAD$/yr and NPV)
+├── maps/
+│   ├── sediment_reduction_map_y5.png
+│   ├── nitrogen_reduction_map.png
+│   ├── phosphorus_reduction_map.png
+│   ├── runoff_reduction_map.png
+│   ├── uncertainty_intervals.png
+│   └── sensitivity_tornado.png
+├── catchments_by_poi.shp                        # Watershed polygons
+├── stream_network.shp                           # Extracted stream network
+├── flow_accumulation.tif                        # Flow routing raster
+├── sediment_loss_baseline.tif                   # Pre-restoration sediment
+├── sediment_reduction_y5.tif                    # Sediment reduction map
+├── nitrogen_delivered_baseline.tif              # Baseline N export
+└── ... (20+ raster and vector outputs)
+```
+
+**Key output metrics:**
+
+| Metric | Unit | Description |
+|--------|------|-------------|
+| `sediment_reduction_y5_t_yr` | tonnes/yr | Sediment load avoided at POI (Year 5) |
+| `n_reduction_kg_yr` | kg N/yr | Nitrogen load reduction |
+| `p_reduction_kg_yr` | kg P/yr | Phosphorus load reduction |
+| `peak_flow_reduction_m3s` | m³/s | Peak flow reduction (design storm) |
+| `runoff_volume_reduction_m3` | m³ | Total runoff volume retained |
+| `annual_value_cad` | CAD$/yr | Economic value of co-benefits |
+| `npv_30yr_cad` | CAD$ | Net present value over 30 years |
+
+**Example results:**
+
+```
+Downstream Impact Summary (Year 5 post-restoration):
+─────────────────────────────────────────────────
+  Community Water Intake:
+    Sediment reduction: 45.3 t/yr (38% reduction)
+    Nitrogen reduction: 125 kg/yr (42% reduction)
+    Phosphorus reduction: 18 kg/yr (45% reduction)
+    Peak flow reduction: 0.8 m³/s (15% reduction)
+
+  Salmon Spawning Habitat:
+    Sediment reduction: 62.1 t/yr (41% reduction)
+    [Improved water clarity → enhanced egg survival]
+
+Total Project Benefits:
+  Sediment avoided: 187 t/yr (~9 dump trucks/year)
+  Nutrient avoided: 312 kg N/yr, 45 kg P/yr
+  Economic value: $18,500 CAD/yr ($385,000 NPV over 30 years)
+
+Uncertainty (95% CI):
+  Sediment reduction: [142 - 238] t/yr
+  Economic value: [$12,800 - $25,200] CAD/yr
+```
+
+**Interpreting results:**
+
+✅ **Strong evidence:** Narrow uncertainty bounds (CV < 30%), supported by field data
+⚠️ **Moderate confidence:** Wider bounds (CV 30-50%), model-driven estimates
+❗ **Low confidence:** Very wide bounds (CV > 50%), limited calibration data
+
+**Next steps after Module 11:**
+
+1. **Validate results:**
+   - Compare modeled sediment/nutrient loads to stream gauge data (if available)
+   - Ground-truth catchment boundaries with field observations
+   - Check restoration mask accuracy against field maps
+
+2. **Refine models:**
+   - Calibrate RUSLE C-factors using local vegetation cover measurements
+   - Adjust Curve Numbers based on soil infiltration tests
+   - Update export coefficients with regional literature values
+
+3. **Attribution analysis:**
+   - Use BACI (Before-After-Control-Impact) design if control sites available
+   - Run synthetic control to create robust counterfactuals
+   - See `modules/downstream/attribution_baci.R` (advanced)
+
+4. **Communicate results:**
+   - Create executive summary for non-technical stakeholders
+   - Highlight priority receptors (e.g., "Restoration reduced sediment reaching community water intake by 38%")
+   - Use maps and visualizations for presentations
+
+**Advanced options:**
+
+🔬 **Process-based models (advanced users):**
+- For gauged catchments or regulatory-grade estimates, consider SWAT (Soil & Water Assessment Tool)
+- Interface: Run SWAT externally, use GEE-derived landcover scenarios as inputs
+- Trade-off: More setup/calibration, but higher realism for flow and nutrient dynamics
+
+🌐 **Habitat connectivity analysis:**
+- Graph-based network models for species movement
+- Circuit theory (Circuitscape) for landscape resistance
+- See `modules/downstream/habitat_connectivity.R` (skeleton provided)
+
+📈 **Temporal attribution (BACI/Synthetic Control):**
+- Requires multi-year time series (baseline + post-restoration monitoring)
+- Combines GEE time series (NDVI, turbidity proxies) with causal inference
+- See `modules/downstream/attribution_baci.R` (skeleton provided)
+
+**Troubleshooting:**
+
+| Issue | Solution |
+|-------|----------|
+| DEM missing | Export from GEE using `GEE_EXPORT_HYDROLOGY_DATA.js` |
+| POI file not found | Create `data_raw/poi/points_of_interest.csv` from template |
+| Catchment boundaries look wrong | Check DEM quality, try depression breaching instead of filling |
+| Sediment loads too high/low | Calibrate RUSLE C-factors and delivery ratio using local data |
+| Uncertainty very high | Add field measurements, calibrate with stream gauge data |
+| WhiteboxTools error | Install using `whitebox::wbt_install()` in R console |
+
+**Best practices:**
+
+1. **Start simple:** Run with default parameters first, refine iteratively
+2. **Ground-truth:** Validate at least one catchment boundary with field visits
+3. **Use local data:** Replace default export coefficients with regional literature
+4. **Report uncertainty:** Always include confidence intervals (95% CI)
+5. **Engage community:** Co-define POIs with Indigenous partners and stakeholders
+6. **Iterate:** Refine models as field monitoring data becomes available
+
+**Outputs for MRV reporting:**
+
+Module 11 outputs integrate seamlessly with Module 07b (Standards Compliance):
+- Tables in `outputs/downstream/tables/` → attach to verification packages
+- Maps in `outputs/downstream/maps/` → include in stakeholder presentations
+- Summary `.txt` files → cite in project documentation
+- Economic valuation → report to funders and carbon credit buyers
+
+**Citation:**
+
+If you use Module 11, please cite the following methods:
+- **RUSLE:** Renard et al. (1997). Predicting Soil Erosion by Water: A Guide to Conservation Planning with the Revised Universal Soil Loss Equation (RUSLE). USDA Agriculture Handbook 703.
+- **NDR:** Vigiak et al. (2012). Comparison of conceptual landscape metrics to define hillslope-scale sediment delivery ratio. *Geomorphology* 138:74-88.
+- **Curve Number:** USDA-NRCS (1986). Urban Hydrology for Small Watersheds. Technical Release 55.
+- **InVEST NDR model:** Sharp et al. (2020). InVEST User's Guide. Stanford University Natural Capital Project.
+
+---
+
 ## 🚀 Quick Start
 
 ### Minimum Workflow (No Bayesian)

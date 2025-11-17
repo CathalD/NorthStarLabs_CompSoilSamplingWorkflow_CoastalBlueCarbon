@@ -1,0 +1,6 @@
+poi_id,poi_name,longitude,latitude,receptor_type,priority,description
+1,Community Water Intake,-123.7500,49.1500,community_water_intake,1,Main water intake for local community
+2,Salmon Spawning Habitat,-123.7400,49.1520,fish_habitat,1,Critical salmon spawning and rearing habitat
+3,Shellfish Harvesting Area,-123.7550,49.1480,shellfish_area,2,Commercial and traditional shellfish harvesting
+4,Public Beach,-123.7450,49.1510,recreation_site,3,Popular beach for swimming and recreation
+5,Agricultural Intake,-123.7520,49.1490,agricultural_intake,2,Irrigation intake for nearby farmland
