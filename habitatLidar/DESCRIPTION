@@ -1,0 +1,51 @@
+Package: habitatLidar
+Type: Package
+Title: Lidar-Based Wildlife Habitat Structure Analysis with 3D Vegetation Modeling
+Version: 0.1.0
+Authors@R: c(
+    person("Conservation Ecology", "Team", email = "contact@example.com", role = c("aut", "cre"))
+    )
+Description: Production-ready R package for processing airborne lidar point clouds
+    to quantify habitat structure for culturally important wildlife species (moose,
+    caribou, deer, bear, salmon). Implements scientifically defensible methods from
+    peer-reviewed literature to calculate canopy and understory metrics, detect and
+    model individual trees in 3D, assess species-specific habitat suitability, and
+    generate automated reports with visualizations for conservation planning and
+    community engagement.
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 7.2.3
+Depends:
+    R (>= 4.0.0)
+Imports:
+    lidR (>= 4.0.0),
+    terra,
+    sf,
+    rgl,
+    future,
+    future.apply,
+    rmarkdown,
+    knitr,
+    dplyr,
+    tidyr,
+    ggplot2,
+    viridis,
+    ForestTools,
+    alphashape3d,
+    geometry,
+    rayshader,
+    plotly,
+    leaflet,
+    htmlwidgets,
+    progress,
+    logger,
+    yaml
+Suggests:
+    testthat (>= 3.0.0),
+    covr,
+    shiny,
+    DT
+VignetteBuilder: knitr
+URL: https://github.com/yourusername/habitatLidar
+BugReports: https://github.com/yourusername/habitatLidar/issues

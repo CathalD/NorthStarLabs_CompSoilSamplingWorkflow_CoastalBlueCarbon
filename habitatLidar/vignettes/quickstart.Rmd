@@ -1,0 +1,327 @@
+---
+title: "Quick Start Guide"
+author: "habitatLidar Package"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Quick Start Guide}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+# Introduction
+
+This quick start guide will get you up and running with **habitatLidar** for analyzing wildlife habitat structure from airborne lidar data. We'll walk through a complete workflow from reading lidar data to generating habitat suitability maps and reports.
+
+## Installation
+
+```{r install}
+# Install from GitHub (once published)
+# devtools::install_github("yourusername/habitatLidar")
+
+# Or install from local source
+# install.packages("habitatLidar", repos = NULL, type = "source")
+
+# Load the package
+library(habitatLidar)
+```
+
+## Required Dependencies
+
+The package requires several dependencies. Check that they're installed:
+
+```{r check-deps}
+required_packages <- c("lidR", "terra", "sf", "rgl", "future", "ggplot2")
+check_dependencies(required_packages)
+```
+
+# Basic Workflow
+
+## Step 1: Read and Preprocess Lidar Data
+
+```{r read-data}
+# Read a single LAS tile
+las <- lidR::readLAS("path/to/your/tile.las")
+
+# Or create a catalog for multiple tiles
+catalog <- lidR::readLAScatalog("path/to/tiles/folder/")
+```
+
+### Quality Control
+
+Before processing, always check data quality:
+
+```{r qc}
+# Generate quality control report
+quality_control_report(las, return_report = FALSE)  # Prints to console
+```
+
+### Preprocessing Pipeline
+
+Run the complete preprocessing workflow:
+
+```{r preprocess}
+# Preprocess: ground classification, normalization, CHM generation
+preprocessed <- preprocess_lidar(
+  las,
+  ground_method = "csf",      # Cloth Simulation Filter
+  noise_method = "sor",       # Statistical Outlier Removal
+  output_dir = "output/preprocessed/"
+)
+
+# Extract components
+las_clean <- preprocessed$las
+chm <- preprocessed$chm
+dtm <- preprocessed$dtm
+```
+
+## Step 2: Calculate Vegetation Metrics
+
+### Canopy Metrics
+
+```{r canopy-metrics}
+# Calculate canopy structure metrics at 20m resolution
+canopy_metrics <- generate_canopy_metrics_grid(las_clean, res = 20)
+
+# View available metrics
+names(canopy_metrics)
+
+# Plot a metric
+plot(canopy_metrics$height_max, main = "Maximum Canopy Height")
+```
+
+### Understory Metrics
+
+```{r understory-metrics}
+# Calculate understory metrics at 10m resolution
+# Specify target species for browse metrics
+understory_metrics <- generate_understory_metrics_grid(
+  las_clean,
+  res = 10,
+  species = "moose"
+)
+
+# Plot browse density
+plot(understory_metrics$browse_density_pct, main = "Moose Browse Density (%)")
+```
+
+## Step 3: Detect Individual Trees
+
+```{r tree-detection}
+# Define variable window size function for tree detection
+# Window increases with tree height
+ws_function <- function(x) { 0.05 * x + 1.0 }
+
+# Run complete tree detection pipeline
+tree_results <- detect_segment_trees(
+  las_clean,
+  chm = chm,
+  method = "watershed",
+  ws = ws_function,
+  hmin = 5,              # Minimum tree height (meters)
+  region = "boreal"      # For DBH estimation
+)
+
+# Extract results
+trees_sf <- tree_results$trees_sf          # Spatial features
+tree_attributes <- tree_results$attributes  # Attribute table
+crowns <- tree_results$crowns              # Crown raster
+
+# View tree statistics
+summary(tree_attributes$height)
+summary(tree_attributes$dbh_estimated)
+```
+
+## Step 4: Calculate Habitat Suitability
+
+```{r hsi}
+# Calculate HSI for multiple species
+hsi_results <- calculate_multispecies_hsi(
+  las_clean,
+  res = 30,
+  species_list = c("moose", "caribou", "deer", "bear"),
+  output_dir = "output/hsi/"
+)
+
+# Plot moose HSI
+plot(hsi_results$moose,
+     main = "Moose Habitat Suitability Index",
+     col = viridis::viridis(100))
+
+# Identify priority habitat areas
+priority_habitat <- identify_priority_habitat(
+  hsi_results$moose,
+  threshold = 0.7,           # High quality threshold
+  min_patch_size = 1         # Minimum 1 hectare
+)
+
+# View priority areas
+plot(sf::st_geometry(priority_habitat), col = "red", add = TRUE)
+```
+
+## Step 5: Generate Reports
+
+### Complete Processing Workflow
+
+For a single-function complete workflow:
+
+```{r complete-workflow}
+# Process everything at once
+results <- process_lidar(
+  las_file = "path/to/tile.las",
+  output_dir = "output/",
+  species = "moose",
+  metric_res = 20,
+  detect_trees = TRUE
+)
+```
+
+### Generate Reports
+
+```{r reports}
+# Define project information
+project_info <- list(
+  title = "Moose Habitat Assessment - Traditional Territory",
+  community = "First Nation Name",
+  author = "Conservation Team",
+  species = "moose",
+  study_area_desc = "500 hectare area in traditional territory",
+  key_findings = c(
+    "High quality moose browse habitat identified in northern section",
+    "Old-growth forest indicators present with 45 trees >30m",
+    "Structural diversity supports multiple wildlife species"
+  )
+)
+
+# Generate complete report package
+report_files <- generate_report_package(
+  results,
+  output_dir = "output/reports/",
+  project_info = project_info
+)
+
+# Prints paths to technical report, community report, maps, etc.
+print(report_files)
+```
+
+# Tips and Best Practices
+
+## Data Quality
+
+- Always run quality control before analysis
+- Check point density (>2 pts/m² recommended for tree detection)
+- Verify coordinate reference system
+- Inspect edge artifacts in tiles
+
+## Processing Parameters
+
+### Ground Classification
+
+- **CSF** (Cloth Simulation Filter): Better for complex terrain
+- **PMF** (Progressive Morphological Filter): Faster, good for flatter areas
+
+### Tree Detection
+
+- Adjust `hmin` based on minimum tree size of interest
+- Use variable window function for mixed-age forests
+- For dense young forests, use smaller window: `function(x) { 0.03 * x + 0.5 }`
+- For open mature forests, larger window: `function(x) { 0.08 * x + 1.5 }`
+
+### Metric Resolution
+
+- **Canopy metrics**: 20-30m for landscape analysis, 10m for detailed
+- **Understory metrics**: 10-20m (finer resolution for browse habitat)
+- **HSI**: 30m balances detail and computational efficiency
+
+## Performance Optimization
+
+```{r performance}
+# For large areas, use parallel processing
+future::plan(future::multisession, workers = 4)
+
+# Process catalog in chunks
+lidR::opt_chunk_size(catalog) <- 500  # 500m chunks
+lidR::opt_chunk_buffer(catalog) <- 30  # 30m buffer
+
+# Monitor progress
+monitor_batch_progress("output/", total_tiles = 100, check_interval = 60)
+```
+
+# Next Steps
+
+- **Habitat Assessment**: See `vignette("habitat_assessment")` for detailed species-specific modeling
+- **3D Visualization**: See `vignette("3d_visualization")` for creating interactive visualizations
+- **Batch Processing**: See documentation for `batch_process_catalog()` for large-area workflows
+
+# Getting Help
+
+```{r help}
+# Function documentation
+?preprocess_lidar
+?calculate_multispecies_hsi
+
+# Package overview
+help(package = "habitatLidar")
+
+# Report issues
+# https://github.com/yourusername/habitatLidar/issues
+```
+
+# Example: Complete Analysis Script
+
+Here's a complete script template:
+
+```{r complete-example}
+library(habitatLidar)
+
+# 1. Setup
+las_file <- "data/my_tile.las"
+output_dir <- "output/"
+species <- "moose"
+
+# 2. Process
+results <- process_lidar(
+  las_file = las_file,
+  output_dir = output_dir,
+  species = species,
+  metric_res = 20,
+  detect_trees = TRUE
+)
+
+# 3. Analyze
+hsi_summary <- summarize_habitat_suitability(results$hsi)
+priority_areas <- identify_priority_habitat(
+  results$hsi[[species]],
+  threshold = 0.7,
+  min_patch_size = 1
+)
+
+# 4. Report
+project_info <- list(
+  title = "Wildlife Habitat Assessment",
+  community = "Community Name",
+  species = species,
+  key_findings = c(
+    sprintf("%d trees detected", nrow(results$trees$attributes)),
+    sprintf("%.1f%% high quality habitat", hsi_summary$high_quality_pct[1])
+  )
+)
+
+generate_report_package(results, paste0(output_dir, "reports/"), project_info)
+
+# 5. Save key outputs
+sf::st_write(priority_areas, paste0(output_dir, "priority_habitat.gpkg"))
+write.csv(results$trees$attributes, paste0(output_dir, "tree_inventory.csv"))
+```
+
+---
+
+*For more detailed examples, see the other vignettes and package documentation.*

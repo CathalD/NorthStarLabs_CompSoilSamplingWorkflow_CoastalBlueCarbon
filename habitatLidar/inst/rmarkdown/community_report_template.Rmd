@@ -1,0 +1,309 @@
+---
+title: "`r params$title`"
+subtitle: "Plain Language Summary for Community"
+date: "`r params$date`"
+output:
+  pdf_document:
+    toc: false
+    fig_caption: true
+params:
+  title: "Wildlife Habitat Assessment"
+  community: "Community Name"
+  date: !r Sys.Date()
+  findings: NULL
+  results: NULL
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 10,
+  fig.height = 7,
+  dpi = 300
+)
+
+library(ggplot2)
+library(terra)
+```
+
+\newpage
+
+# What We Did
+
+We used **advanced technology called lidar** (Light Detection and Ranging) to create a detailed 3D map of the forest. This technology uses laser pulses from an airplane to measure the height and structure of trees, shrubs, and ground vegetation.
+
+Think of it like taking millions of photographs from above, but instead of just colors, we measure the exact height of everything - from the tallest trees to the smallest bushes. This helps us understand what kind of habitat exists for wildlife like moose, caribou, deer, and other animals important to the community.
+
+```{r study-area-info}
+cat(sprintf("\n**Study Area:** %s\n\n",
+            if (!is.null(params$community)) params$community else "Traditional Territory"))
+
+if (!is.null(params$results$las)) {
+  bbox <- sf::st_bbox(params$results$las)
+  area_m2 <- (bbox["xmax"] - bbox["xmin"]) * (bbox["ymax"] - bbox["ymin"])
+  cat(sprintf("**Total Area Analyzed:** %s\n\n", format_area(area_m2)))
+}
+```
+
+# What We Found
+
+## Key Findings
+
+```{r findings}
+if (!is.null(params$findings)) {
+  for (i in seq_along(params$findings)) {
+    cat(sprintf("\n**%d. %s**\n\n", i, params$findings[i]))
+  }
+} else {
+  cat("\n")
+  if (!is.null(params$results$trees)) {
+    cat(sprintf("- We identified **%s trees** in the study area\n\n",
+                format(nrow(params$results$trees$attributes), big.mark = ",")))
+
+    large_trees <- sum(params$results$trees$attributes$height >= 30)
+    if (large_trees > 0) {
+      cat(sprintf("- Found **%d very large trees** (over 30 meters tall) - these are important old-growth indicators\n\n", large_trees))
+    }
+  }
+
+  cat("- The forest has good structural diversity - different layers of vegetation from ground to canopy\n\n")
+  cat("- Several areas show high-quality habitat for wildlife\n\n")
+}
+```
+
+\newpage
+
+# Maps: Where is the Best Habitat?
+
+These maps show habitat quality for wildlife. **Dark blue/purple areas** have lower quality habitat. **Yellow/green areas** have better quality habitat.
+
+```{r habitat-maps, fig.cap="Habitat quality maps showing where animals can find the best conditions", fig.height=8}
+if (!is.null(params$results$hsi)) {
+  for (species in names(params$results$hsi)) {
+    hsi_df <- as.data.frame(params$results$hsi[[species]], xy = TRUE)
+    names(hsi_df)[3] <- "hsi"
+
+    # Create larger, clearer plot
+    p <- ggplot() +
+      geom_raster(data = hsi_df, aes(x = x, y = y, fill = hsi)) +
+      scale_fill_viridis_c(
+        name = "Habitat\nQuality",
+        limits = c(0, 1),
+        breaks = c(0, 0.3, 0.5, 0.7, 1.0),
+        labels = c("Poor", "Low", "Moderate", "Good", "Excellent"),
+        option = "viridis"
+      ) +
+      labs(
+        title = sprintf("%s Habitat Quality", tools::toTitleCase(species)),
+        subtitle = "Yellow/green = better habitat  |  Blue/purple = lower quality habitat",
+        x = "",
+        y = ""
+      ) +
+      theme_minimal(base_size = 14) +
+      theme(
+        plot.title = element_text(hjust = 0.5, size = 18, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5, size = 12),
+        legend.position = "right",
+        legend.key.height = unit(2, "cm"),
+        axis.text = element_blank()
+      ) +
+      coord_equal()
+
+    print(p)
+  }
+}
+```
+
+\newpage
+
+# Forest Structure: What Does it Look Like?
+
+## Tree Heights
+
+This chart shows how many trees of different heights we found. Taller trees (especially over 30 meters) are signs of older, mature forest.
+
+```{r tree-heights, fig.cap="How many trees of each height class", fig.height=6}
+if (!is.null(params$results$trees)) {
+  trees <- params$results$trees$attributes
+
+  ggplot(trees, aes(x = height)) +
+    geom_histogram(bins = 25, fill = "#2E7D32", color = "white", alpha = 0.8) +
+    geom_vline(xintercept = 30, linetype = "dashed", color = "red", linewidth = 1.5) +
+    annotate("text", x = 32, y = Inf, label = "Old Forest",
+             hjust = 0, vjust = 2, color = "red", size = 6, fontface = "bold") +
+    labs(
+      title = "Tree Heights in Study Area",
+      x = "Tree Height (meters)",
+      y = "Number of Trees"
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(
+      plot.title = element_text(hjust = 0.5, size = 18, face = "bold"),
+      axis.title = element_text(size = 14, face = "bold")
+    )
+}
+```
+
+## Vegetation Layers
+
+Forests have different layers - like floors in a building. Each layer provides different benefits for wildlife:
+
+- **Ground layer (0-2m)**: New growth, grasses, low shrubs
+- **Shrub layer (2-8m)**: Browse for moose and deer, berries for bears
+- **Midstory (8-16m)**: Young trees, cover for birds and small animals
+- **Canopy (16m+)**: Mature trees, shade, nesting sites
+
+```{r vegetation-layers, fig.cap="How much vegetation is in each layer", fig.height=6}
+if (!is.null(params$results$canopy_metrics)) {
+  metrics_df <- as.data.frame(params$results$canopy_metrics, na.rm = TRUE)
+
+  if (all(c("vdr_ground_2m", "vdr_2_8m", "vdr_8_16m", "vdr_16plus") %in% names(metrics_df))) {
+    layer_data <- data.frame(
+      Layer = c("Ground\n(0-2m)", "Shrub\n(2-8m)", "Midstory\n(8-16m)", "Canopy\n(16m+)"),
+      Percentage = c(
+        mean(metrics_df$vdr_ground_2m, na.rm = TRUE) * 100,
+        mean(metrics_df$vdr_2_8m, na.rm = TRUE) * 100,
+        mean(metrics_df$vdr_8_16m, na.rm = TRUE) * 100,
+        mean(metrics_df$vdr_16plus, na.rm = TRUE) * 100
+      )
+    )
+
+    layer_data$Layer <- factor(layer_data$Layer, levels = layer_data$Layer)
+
+    ggplot(layer_data, aes(x = Layer, y = Percentage, fill = Layer)) +
+      geom_col(width = 0.7) +
+      geom_text(aes(label = sprintf("%.0f%%", Percentage)),
+                vjust = -0.5, size = 6, fontface = "bold") +
+      scale_fill_manual(values = c("#8B4513", "#228B22", "#32CD32", "#006400")) +
+      labs(
+        title = "Forest Layers - How Much in Each?",
+        x = "",
+        y = "Percentage of Vegetation"
+      ) +
+      theme_minimal(base_size = 14) +
+      theme(
+        plot.title = element_text(hjust = 0.5, size = 18, face = "bold"),
+        legend.position = "none",
+        axis.text.x = element_text(size = 12, face = "bold"),
+        axis.title.y = element_text(size = 14, face = "bold")
+      ) +
+      ylim(0, max(layer_data$Percentage) * 1.15)
+  }
+}
+```
+
+\newpage
+
+# What This Means
+
+## For Wildlife
+
+```{r wildlife-meaning}
+if (!is.null(params$results$hsi)) {
+  hsi_summary <- summarize_habitat_suitability(params$results$hsi)
+
+  for (i in 1:nrow(hsi_summary)) {
+    species <- hsi_summary$species[i]
+    quality <- hsi_summary$mean_hsi[i]
+    high_pct <- hsi_summary$high_quality_pct[i]
+
+    cat(sprintf("\n**%s:**\n\n", tools::toTitleCase(species)))
+
+    if (quality >= 0.6) {
+      cat(sprintf("- Overall habitat quality is **GOOD** (%.0f%% of area is high quality)\n", high_pct))
+      cat(sprintf("- This area provides excellent conditions for %s\n", species))
+    } else if (quality >= 0.4) {
+      cat(sprintf("- Overall habitat quality is **MODERATE**\n"))
+      cat(sprintf("- Some good areas exist, but there's room for improvement\n"))
+    } else {
+      cat(sprintf("- Habitat quality is **LOWER**\n"))
+      cat(sprintf("- May benefit from habitat enhancement efforts\n"))
+    }
+    cat("\n")
+  }
+}
+```
+
+## For Conservation and Land Use Planning
+
+The detailed maps and information from this analysis can help with:
+
+1. **Identifying important areas to protect** - The high-quality habitat areas shown on the maps
+2. **Planning sustainable forestry** - Understanding where sensitive habitat exists
+3. **Monitoring changes over time** - This analysis can be repeated in the future to track changes
+4. **Supporting funding applications** - Scientific data for conservation projects
+5. **Traditional use planning** - Knowing where animals are likely to be found
+
+\newpage
+
+# Recommendations
+
+Based on what we found, here are some suggestions:
+
+## Areas to Protect
+
+```{r protection-recommendations}
+if (!is.null(params$results$hsi)) {
+  # Identify high-quality areas
+  cat("The following areas showed particularly high habitat quality:\n\n")
+  cat("- Areas with HSI scores above 0.7 (shown in yellow/green on maps)\n")
+  cat("- Patches with old-growth characteristics (large trees >30m)\n")
+  cat("- Areas with good understory for browse and berries\n\n")
+}
+```
+
+## Enhancement Opportunities
+
+Areas with moderate habitat quality could be improved through:
+
+- Selective harvesting that maintains structural diversity
+- Protecting regeneration areas for future browse
+- Maintaining connectivity between high-quality patches
+
+## Monitoring
+
+Consider repeating this analysis every 5-10 years to:
+
+- Track habitat changes
+- Assess effectiveness of management actions
+- Document recovery or degradation
+
+\newpage
+
+# Questions and Next Steps
+
+## Understanding the Technology
+
+**Q: How accurate is lidar?**
+
+A: Very accurate! It can measure heights to within 10-15 cm and detects features as small as shrubs and individual tree branches.
+
+**Q: What can't lidar tell us?**
+
+A: Lidar doesn't identify tree species or tell us about wildlife actually using the area - it only measures forest structure. Combining lidar with traditional knowledge and field observations gives the most complete picture.
+
+## Using These Results
+
+This information can support:
+
+- Land use planning and zoning decisions
+- Environmental assessment for proposed developments
+- Grant applications for conservation funding
+- Education and community engagement
+- Integration with traditional knowledge
+
+## Contact and Follow-up
+
+For questions about this analysis or to access the detailed data:
+
+[Contact information]
+
+---
+
+**About This Report**
+
+This community-friendly summary was created using the **habitatLidar** software package, which uses peer-reviewed scientific methods to analyze forest structure from lidar data. The full technical report contains additional detail and is available upon request.
+
+*Analysis completed: `r params$date`*

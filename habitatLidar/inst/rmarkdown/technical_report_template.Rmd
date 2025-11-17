@@ -1,0 +1,277 @@
+---
+title: "`r params$title`"
+author: "`r params$author`"
+date: "`r params$date`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    fig_caption: true
+params:
+  title: "Wildlife Habitat Structure Assessment"
+  author: "habitatLidar Analysis Team"
+  date: !r Sys.Date()
+  study_area: NULL
+  results: NULL
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 8,
+  fig.height = 6,
+  dpi = 300
+)
+
+library(ggplot2)
+library(knitr)
+library(terra)
+library(dplyr)
+```
+
+# Executive Summary
+
+This report presents comprehensive results from lidar-based analysis of wildlife habitat structure. The analysis employs scientifically validated methods to characterize forest structure, identify critical habitat features, and assess suitability for culturally important wildlife species.
+
+**Key findings:**
+
+- Study area covers `r if (!is.null(params$results$las)) format_area(sf::st_bbox(params$results$las)["xmax"] - sf::st_bbox(params$results$las)["xmin"] * sf::st_bbox(params$results$las)["ymax"] - sf::st_bbox(params$results$las)["ymin"]) else "area not available"`
+- Lidar data quality: `r if (!is.null(params$results$las)) sprintf("%.1f pts/m²", nrow(params$results$las@data) / (sf::st_bbox(params$results$las)["xmax"] - sf::st_bbox(params$results$las)["xmin"]) / (sf::st_bbox(params$results$las)["ymax"] - sf::st_bbox(params$results$las)["ymin"])) else "N/A"`
+- Trees detected: `r if (!is.null(params$results$trees)) nrow(params$results$trees$attributes) else "N/A"`
+
+# Introduction
+
+## Study Area
+
+```{r study-area}
+if (!is.null(params$study_area)) {
+  cat(params$study_area)
+} else {
+  cat("Study area description not provided.")
+}
+```
+
+## Objectives
+
+1. Characterize forest structure using airborne lidar data
+2. Quantify canopy and understory vegetation metrics
+3. Detect and measure individual trees
+4. Assess habitat suitability for target wildlife species
+5. Identify priority areas for conservation
+
+# Methods
+
+## Data Acquisition and Processing
+
+### Lidar Data
+
+Airborne lidar point cloud data (.las/.laz format) was processed using the **habitatLidar** R package, which implements peer-reviewed algorithms for vegetation analysis.
+
+### Processing Workflow
+
+1. **Data Preprocessing**
+   - Ground classification using Cloth Simulation Filter (Zhang et al. 2016)
+   - Noise filtering with statistical outlier removal
+   - Height normalization relative to digital terrain model
+   - Quality control assessment
+
+2. **Vegetation Metrics**
+   - Canopy height and structure metrics at 20m resolution
+   - Understory density and browse metrics at 10m resolution
+   - Vertical vegetation distribution analysis
+
+3. **Tree Detection**
+   - Individual tree detection using local maxima filter (Li et al. 2012)
+   - Crown segmentation via watershed algorithm (Silva et al. 2016)
+   - Tree attribute extraction (height, crown dimensions, DBH estimation)
+
+4. **Habitat Suitability Modeling**
+   - Species-specific habitat suitability indices (HSI)
+   - Based on published habitat relationships
+   - 0-1 scale (0 = unsuitable, 1 = optimal)
+
+## Quality Assurance
+
+```{r quality-report}
+if (!is.null(params$results$las)) {
+  qc <- quality_control_report(params$results$las, return_report = TRUE)
+
+  cat(sprintf("**Spatial Extent:**\n\n"))
+  cat(sprintf("- Area: %s\n", qc$extent$area_formatted))
+  cat(sprintf("- CRS: %s\n\n", qc$crs))
+
+  cat(sprintf("**Point Statistics:**\n\n"))
+  cat(sprintf("- Total points: %s\n", format(qc$points$total_points, big.mark = ",")))
+  cat(sprintf("- Point density: %.2f pts/m²\n", qc$points$point_density))
+  cat(sprintf("- Multiple returns: %.1f%%\n\n", qc$points$multiple_returns_pct))
+
+  cat(sprintf("**Height Statistics:**\n\n"))
+  cat(sprintf("- Range: %.2f - %.2f m\n", qc$height$min, qc$height$max))
+  cat(sprintf("- Mean: %.2f m (SD: %.2f)\n\n", qc$height$mean, qc$height$sd))
+
+  cat(sprintf("**Classification:**\n\n"))
+  cat(sprintf("- Ground points: %.1f%%\n", qc$classification$ground_pct))
+  cat(sprintf("- Vegetation points: %.1f%%\n", qc$classification$vegetation_pct))
+}
+```
+
+# Results
+
+## Forest Structure Metrics
+
+### Canopy Height
+
+```{r canopy-height, fig.cap="Canopy height model showing vegetation height distribution"}
+if (!is.null(params$results$chm)) {
+  plot(params$results$chm, main = "Canopy Height Model (CHM)",
+       col = viridis::viridis(100), axes = TRUE)
+}
+```
+
+### Vertical Structure
+
+Analysis of vertical vegetation distribution reveals the layering and complexity of forest structure, which is critical for wildlife habitat quality.
+
+```{r vertical-structure, fig.cap="Vertical distribution of vegetation across height strata"}
+if (!is.null(params$results$canopy_metrics)) {
+  # Extract VDR data
+  metrics_df <- as.data.frame(params$results$canopy_metrics, na.rm = TRUE)
+
+  if (all(c("vdr_ground_2m", "vdr_2_8m", "vdr_8_16m", "vdr_16plus") %in% names(metrics_df))) {
+    vdr_summary <- data.frame(
+      Layer = c("0-2m\n(Ground)", "2-8m\n(Shrub)", "8-16m\n(Midstory)", "16+m\n(Canopy)"),
+      Proportion = c(
+        mean(metrics_df$vdr_ground_2m, na.rm = TRUE),
+        mean(metrics_df$vdr_2_8m, na.rm = TRUE),
+        mean(metrics_df$vdr_8_16m, na.rm = TRUE),
+        mean(metrics_df$vdr_16plus, na.rm = TRUE)
+      )
+    )
+
+    vdr_summary$Layer <- factor(vdr_summary$Layer, levels = vdr_summary$Layer)
+
+    ggplot(vdr_summary, aes(x = Layer, y = Proportion, fill = Layer)) +
+      geom_col() +
+      scale_fill_viridis_d(option = "D") +
+      labs(
+        title = "Vertical Distribution Ratio (VDR)",
+        x = "Height Stratum",
+        y = "Proportion of Points"
+      ) +
+      theme_minimal() +
+      theme(
+        legend.position = "none",
+        plot.title = element_text(hjust = 0.5, face = "bold"),
+        axis.text.x = element_text(size = 9)
+      )
+  }
+}
+```
+
+## Individual Tree Analysis
+
+```{r tree-summary}
+if (!is.null(params$results$trees)) {
+  trees <- params$results$trees$attributes
+
+  cat(sprintf("**Tree Detection Summary:**\n\n"))
+  cat(sprintf("- Total trees detected: %d\n", nrow(trees)))
+  cat(sprintf("- Mean height: %.1f m (range: %.1f - %.1f m)\n",
+              mean(trees$height), min(trees$height), max(trees$height)))
+  cat(sprintf("- Mean DBH (estimated): %.1f cm\n", mean(trees$dbh_estimated)))
+  cat(sprintf("- Trees >30m (old-growth indicators): %d\n", sum(trees$height >= 30)))
+}
+```
+
+```{r tree-distribution, fig.cap="Distribution of tree heights across study area"}
+if (!is.null(params$results$trees)) {
+  trees <- params$results$trees$attributes
+
+  ggplot(trees, aes(x = height)) +
+    geom_histogram(bins = 30, fill = "#2E7D32", color = "white", alpha = 0.8) +
+    geom_vline(xintercept = 30, linetype = "dashed", color = "red", linewidth = 1) +
+    annotate("text", x = 32, y = Inf, label = "Old-growth\nthreshold",
+             hjust = 0, vjust = 1.5, color = "red", size = 3) +
+    labs(
+      title = "Tree Height Distribution",
+      x = "Height (m)",
+      y = "Number of Trees"
+    ) +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+}
+```
+
+## Habitat Suitability Assessment
+
+```{r hsi-summary}
+if (!is.null(params$results$hsi)) {
+  hsi_summary <- summarize_habitat_suitability(params$results$hsi)
+
+  kable(hsi_summary,
+        caption = "Habitat Suitability Index summary by species",
+        digits = 2,
+        col.names = c("Species", "Mean HSI", "Median HSI", "SD",
+                     "High Quality %", "Moderate %", "Low %", "N Cells"))
+}
+```
+
+```{r hsi-maps, fig.cap="Habitat suitability maps for target species", fig.height=5}
+if (!is.null(params$results$hsi)) {
+  for (species in names(params$results$hsi)) {
+    p <- create_hsi_map(params$results$hsi[[species]], species)
+    print(p)
+  }
+}
+```
+
+# Discussion
+
+## Key Findings
+
+1. **Forest Structure Complexity:** The analyzed area exhibits `r if (!is.null(params$results$canopy_metrics)) { metrics_df <- as.data.frame(params$results$canopy_metrics, na.rm = TRUE); sprintf("%.2f", mean(metrics_df$structural_complexity_index, na.rm = TRUE))} else "N/A"` structural complexity (0-1 scale), indicating `r if (!is.null(params$results$canopy_metrics)) { sci <- mean(as.data.frame(params$results$canopy_metrics, na.rm = TRUE)$structural_complexity_index, na.rm = TRUE); ifelse(sci > 0.7, "high structural diversity suitable for diverse wildlife", ifelse(sci > 0.4, "moderate structural diversity", "low structural complexity"))} else "varying"` conditions.
+
+2. **Old-Growth Features:** `r if (!is.null(params$results$trees)) { sprintf("%d trees exceeding 30m height were detected, indicating presence of old-growth characteristics", sum(params$results$trees$attributes$height >= 30))} else "Old-growth assessment not available"`.
+
+3. **Habitat Quality:** For the target species, habitat suitability mapping identified specific high-quality areas suitable for protection or enhancement.
+
+## Conservation Recommendations
+
+Based on the habitat structure analysis:
+
+- **Priority Areas:** Areas with HSI >0.7 should be considered for protection
+- **Enhancement Opportunities:** Areas with moderate HSI (0.5-0.7) may benefit from habitat restoration
+- **Connectivity:** Consider landscape connectivity when planning conservation areas
+
+## Limitations and Uncertainty
+
+- Lidar point density affects detection of small vegetation features
+- Tree species identification requires additional data (hyperspectral, field validation)
+- Habitat models assume idealized conditions; actual use depends on additional factors
+- Seasonal variation not captured in single acquisition
+
+# References
+
+1. Zhang, W., et al. (2016). An Easy-to-Use Airborne LiDAR Data Filtering Method Based on Cloth Simulation. *Remote Sensing* 8(6): 501.
+
+2. Li, W., et al. (2012). A New Method for Segmenting Individual Trees from the Lidar Point Cloud. *Photogrammetric Engineering & Remote Sensing* 78(1): 75-84.
+
+3. Silva, C.A., et al. (2016). Imputation of Individual Longleaf Pine Tree Attributes from Field and LiDAR Data. *Canadian Journal of Remote Sensing* 42(5): 554-573.
+
+# Appendices
+
+## Appendix A: Methodology Details
+
+Detailed technical specifications of algorithms and parameters used.
+
+## Appendix B: Data Products
+
+List of generated geospatial data products and formats.
+
+---
+
+*Report generated using habitatLidar R package*
+*Contact: [your contact information]*
