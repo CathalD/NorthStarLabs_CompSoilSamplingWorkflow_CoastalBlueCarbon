@@ -3,8 +3,9 @@
 **A flexible R-based framework for carbon monitoring, reporting, and verification (MMRV) across multiple ecosystem types**
 
 [![Multi-Ecosystem](https://img.shields.io/badge/Ecosystems-5%20Types-brightgreen)]()
-[![Standards Compliant](https://img.shields.io/badge/Standards-VM0033%20%7C%20IPCC%20%7C%20ORRAA-blue)]()
-[![Version](https://img.shields.io/badge/version-2.0-orange)]()
+[![Standards Compliant](https://img.shields.io/badge/Standards-VM0033%20%7C%20IPCC%20%7C%20ORRAA%20%7C%20ICVCM%20CCP-blue)]()
+[![Version](https://img.shields.io/badge/version-2.1-orange)]()
+[![ICVCM](https://img.shields.io/badge/ICVCM-CCP%20Ready-success)]()
 
 ---
 
@@ -94,6 +95,8 @@ This workflow provides a **unified analytical framework** for soil carbon stock 
 ### Standards Compliance
 ✅ **VM0033, VM0012, VM0026, VM0036** - Methodology-specific calculations
 ✅ **IPCC guidelines** - Tier 3 approach with site-specific data
+✅ **ICVCM Core Carbon Principles** - Automated CCP compliance assessment
+✅ **ORRAA High Quality Blue Carbon** - Best practice standards
 ✅ **Automated checks** - Compliance validation and recommendations
 
 ### Comprehensive Reporting
@@ -462,6 +465,86 @@ project_root/
 | `comprehensive_standards_report.html` | Standards compliance assessment |
 | `vm0033_verification_package.html` | MMRV verification documentation |
 | `workflow_summary_*.txt` | Execution summary |
+
+---
+
+## 🏆 ICVCM Core Carbon Principles (CCP) Compliance
+
+**NEW in Version 2.1:** Automated assessment against the **ICVCM Core Carbon Principles**, the global quality benchmark for high-integrity carbon credits.
+
+### What is ICVCM CCP?
+
+The **Integrity Council for the Voluntary Carbon Market (ICVCM)** established the **Core Carbon Principles (CCPs)** as a global quality standard. CCP-labeled carbon credits are recognized worldwide as meeting rigorous standards for:
+
+- **Environmental integrity** - Real, measurable, permanent emission reductions/removals
+- **Sustainable development** - Positive impacts on communities and ecosystems
+- **Transparency** - Full disclosure of project information
+- **Robust governance** - Independent verification and tracking
+
+### The 10 Core Carbon Principles
+
+1. **CCP1: Effective Governance** - Program has effective governance structure
+2. **CCP2: Tracking** - Emission reductions tracked toward mitigation goals
+3. **CCP3: Transparency** - All relevant information disclosed
+4. **CCP4: Robust Validation/Verification** - Independent third-party assessment
+5. **CCP5: Additionality** - Activity goes beyond business-as-usual
+6. **CCP6: Permanence** - Permanent emission reductions or removals
+7. **CCP7: Robust Quantification** - Conservative, scientifically robust methods
+8. **CCP8: No Net Harm** - No violation of laws or negative impacts
+9. **CCP9: Sustainable Development Benefits** - Net positive impacts on SDGs
+10. **CCP10: Net-Zero Contribution** - Consistent with net-zero pathways
+
+### How the Workflow Assesses CCP Compliance
+
+The workflow provides **automated assessment** for technical principles:
+
+✅ **CCP1-CCP4** (Program-level) - Checks if using CCP-approved programs (Verra, Gold Standard, etc.)
+✅ **CCP5** (Additionality) - Verifies temporal analysis and baseline documentation
+✅ **CCP6** (Permanence) - Assesses ecosystem-specific reversal risks and monitoring
+✅ **CCP7** (Quantification) - Confirms conservative approach, uncertainty analysis, cross-validation
+📋 **CCP8** (No Harm) - Manual review required (EIA, FPIC, legal compliance)
+📋 **CCP9** (SD Benefits) - Manual review required (SDG mapping, co-benefits)
+✅ **CCP10** (Net-Zero) - Classifies activity type and Paris Agreement alignment
+
+### Enable ICVCM Assessment
+
+In `config.R`:
+
+```r
+ENABLE_ICVCM_CCP_ASSESSMENT <- TRUE
+```
+
+Run workflow:
+```r
+source("run_workflow.R")
+```
+
+### Outputs
+
+Assessment generates three key reports in `outputs/reports/`:
+
+1. **icvcm_ccp_scorecard.csv** - Complete assessment of all 10 principles
+2. **icvcm_gap_analysis.csv** - Identifies principles requiring attention
+3. **icvcm_action_plan.csv** - Prioritized actions with timelines
+
+### Interpreting Results
+
+| Status | Meaning |
+|--------|---------|
+| ✓ PASS | Principle met or strong alignment |
+| ◐ PARTIAL | Partially compliant, improvements needed |
+| ⚠ REVIEW | Requires attention or additional work |
+| 📋 MANUAL REVIEW | Requires external documentation |
+| ✗ FAIL | Not compliant - critical action needed |
+
+**Overall Score:**
+- **≥80%** - Well-positioned for CCP compliance
+- **60-79%** - Partial alignment, address gaps
+- **<60%** - Significant work needed
+
+### Detailed Guide
+
+For complete documentation, see [ICVCM_CCP_COMPLIANCE_GUIDE.md](ICVCM_CCP_COMPLIANCE_GUIDE.md)
 
 ---
 

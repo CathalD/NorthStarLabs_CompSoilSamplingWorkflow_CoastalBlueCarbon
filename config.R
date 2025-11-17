@@ -71,6 +71,7 @@ ENABLE_REMOTE_SENSING <- FALSE
 ENABLE_BAYESIAN <- FALSE  # Requires GEE prior maps
 ENABLE_TEMPORAL_ANALYSIS <- FALSE
 ENABLE_UNCERTAINTY_ANALYSIS <- TRUE
+ENABLE_ICVCM_CCP_ASSESSMENT <- TRUE  # ICVCM Core Carbon Principles compliance
 
 # ============================================================================
 # FILE PATHS

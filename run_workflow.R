@@ -388,6 +388,22 @@ if (run_modules$standards_report) {
   cat("\n[Module 07b] SKIPPED\n")
 }
 
+# ICVCM Core Carbon Principles Assessment
+if (ENABLE_ICVCM_CCP_ASSESSMENT && file.exists("11_icvcm_ccp_assessment.R")) {
+  cat("\n[Module 11] ICVCM Core Carbon Principles Assessment\n")
+  log_message("Starting Module 11: ICVCM CCP Assessment")
+
+  tryCatch({
+    source("11_icvcm_ccp_assessment.R")
+    log_message("Module 11 completed successfully")
+  }, error = function(e) {
+    log_message(sprintf("Module 11 failed: %s", e$message), "WARNING")
+    cat("  WARNING: ICVCM CCP assessment failed. Continuing workflow.\n")
+  })
+} else if (!ENABLE_ICVCM_CCP_ASSESSMENT) {
+  cat("\n[Module 11] SKIPPED - ICVCM CCP assessment disabled\n")
+}
+
 # ============================================================================
 # PART 7: TEMPORAL ANALYSIS (OPTIONAL)
 # ============================================================================
