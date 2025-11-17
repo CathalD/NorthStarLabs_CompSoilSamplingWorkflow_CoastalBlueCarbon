@@ -1,0 +1,775 @@
+---
+title: "Complete Tutorial: Wildlife Habitat Assessment from Lidar"
+author: "habitatLidar Package"
+date: "`r Sys.Date()`"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 3
+    fig_width: 8
+    fig_height: 6
+vignette: >
+  %\VignetteIndexEntry{Complete Tutorial: Wildlife Habitat Assessment from Lidar}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 8,
+  fig.height = 6,
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+# Introduction
+
+This tutorial walks you through a complete wildlife habitat assessment using the **habitatLidar** package. We'll use synthetic test data that mimics real airborne lidar data from Canadian forests.
+
+## What You'll Learn
+
+By the end of this tutorial, you'll know how to:
+
+1. Load and inspect lidar point cloud data
+2. Perform quality control and preprocessing
+3. Calculate canopy and understory vegetation metrics
+4. Detect and analyze individual trees
+5. Model habitat suitability for moose (and other species)
+6. Create 3D visualizations
+7. Generate automated assessment reports
+
+## Scenario
+
+You're a conservation ecologist working with a First Nation community to assess moose winter habitat quality in a traditional territory. You have airborne lidar data covering a 200m x 200m area and need to:
+
+- Identify high-quality browse habitat
+- Map forest structure
+- Locate old-growth indicators
+- Produce maps and reports for land-use planning
+
+Let's get started!
+
+# Setup
+
+## Install and Load Package
+
+```{r install, eval=FALSE}
+# Install habitatLidar (if not already installed)
+# devtools::install_github("yourusername/habitatLidar")
+# Or from local source:
+# devtools::install("path/to/habitatLidar")
+
+# Load the package
+library(habitatLidar)
+```
+
+```{r load, message=FALSE}
+# Load required libraries
+library(habitatLidar)
+library(lidR)
+library(terra)
+library(sf)
+library(ggplot2)
+library(dplyr)
+```
+
+## Generate Test Data
+
+First, let's create our test lidar dataset:
+
+```{r generate-data, eval=FALSE}
+# Run the test data generation script
+source(system.file("data-raw/create_test_data.R", package = "habitatLidar"))
+```
+
+For this tutorial, we'll assume the test data has been generated. Let's load it:
+
+```{r load-data, eval=FALSE}
+# Load the main test tile
+las <- readLAS(system.file("extdata/test_tile.las", package = "habitatLidar"))
+
+# Load area of interest
+aoi <- st_read(system.file("extdata/test_aoi.gpkg", package = "habitatLidar"),
+               quiet = TRUE)
+
+# Load moose occurrences
+moose_obs <- read.csv(system.file("extdata/moose_occurrences.csv",
+                                   package = "habitatLidar"))
+```
+
+```{r simulate-load, include=FALSE}
+# For vignette building, simulate data loading
+# In practice, users will have real data files
+set.seed(42)
+
+# Create minimal example data for demonstration
+# (In real use, this comes from the generated files)
+las_example <- data.frame(
+  X = runif(1000, 0, 200),
+  Y = runif(1000, 0, 200),
+  Z = runif(1000, 100, 130)
+)
+```
+
+# Step 1: Inspect the Data
+
+## Quick Look at Point Cloud
+
+```{r inspect, eval=FALSE}
+# Basic information
+print(las)
+
+# Summary statistics
+summary(las)
+
+# Check CRS
+st_crs(las)
+
+# Plot in 2D
+plot(las, color = "Z", legend = TRUE)
+```
+
+**What to look for:**
+- Total number of points
+- Point density (should be >2 pts/m² for good analysis)
+- Coordinate reference system (CRS)
+- Height range (Z values)
+- Classification codes
+
+## Quality Control Report
+
+Always start with a quality control assessment:
+
+```{r qc, eval=FALSE}
+# Generate comprehensive QC report
+qc_report <- quality_control_report(las, return_report = TRUE)
+
+# Print key metrics
+cat(sprintf("Study Area: %s\n", qc_report$extent$area_formatted))
+cat(sprintf("Point Density: %.2f pts/m²\n", qc_report$points$point_density))
+cat(sprintf("Ground Points: %.1f%%\n", qc_report$classification$ground_pct))
+cat(sprintf("Height Range: %.1f - %.1f m\n",
+            qc_report$height$min, qc_report$height$max))
+```
+
+**Expected output:**
+```
+Study Area: 4.00 ha
+Point Density: 4.00 pts/m²
+Ground Points: 20.0%
+Height Range: 0.0 - 45.2 m
+```
+
+# Step 2: Preprocess the Data
+
+Preprocessing includes ground classification, noise removal, and height normalization.
+
+## Complete Preprocessing Pipeline
+
+```{r preprocess, eval=FALSE}
+# Run complete preprocessing workflow
+preprocessed <- preprocess_lidar(
+  las,
+  ground_method = "csf",      # Cloth Simulation Filter
+  noise_method = "sor",       # Statistical Outlier Removal
+  output_dir = "output/preprocessed/"
+)
+
+# Extract components
+las_clean <- preprocessed$las
+dtm <- preprocessed$dtm
+chm <- preprocessed$chm
+qc <- preprocessed$quality_report
+```
+
+**What's happening:**
+
+1. **Noise Removal**: Removes statistical outliers and isolated points
+2. **Ground Classification**: Uses CSF algorithm to identify ground points
+3. **DTM Generation**: Creates Digital Terrain Model from ground points
+4. **Height Normalization**: Subtracts terrain from all points (Z becomes height above ground)
+5. **CHM Generation**: Creates Canopy Height Model at 0.5m resolution
+
+## Visualize Results
+
+```{r vis-preprocess, eval=FALSE}
+# Plot DTM
+plot(dtm, main = "Digital Terrain Model (DTM)")
+
+# Plot CHM
+plot(chm, main = "Canopy Height Model (CHM)",
+     col = viridis::viridis(100))
+
+# Plot normalized point cloud
+plot(las_clean, color = "Z", legend = TRUE,
+     main = "Height-Normalized Point Cloud")
+```
+
+**Key insight:** After normalization, Z values represent height above ground, making it easy to identify vegetation layers (0-2m = shrubs, 2-8m = midstory, >8m = canopy).
+
+# Step 3: Calculate Vegetation Metrics
+
+## Canopy Structure Metrics
+
+Calculate comprehensive canopy metrics at 20m grid resolution:
+
+```{r canopy-metrics, eval=FALSE}
+# Generate canopy metrics
+canopy_metrics <- generate_canopy_metrics_grid(las_clean, res = 20)
+
+# View available metrics
+names(canopy_metrics)
+```
+
+**Available metrics include:**
+- `height_max`, `height_mean`, `height_p95`, `height_p99`
+- `canopy_cover_pct`
+- `structural_complexity_index`
+- `fhd` (Foliage Height Diversity)
+- `rumple_index`
+- And many more!
+
+### Visualize Key Metrics
+
+```{r plot-canopy, eval=FALSE}
+# Maximum canopy height
+plot(canopy_metrics$height_max,
+     main = "Maximum Canopy Height",
+     col = viridis::viridis(100))
+
+# Structural complexity
+plot(canopy_metrics$structural_complexity_index,
+     main = "Structural Complexity Index",
+     col = viridis::plasma(100))
+
+# Canopy cover
+plot(canopy_metrics$canopy_cover_pct,
+     main = "Canopy Cover (%)",
+     col = viridis::mako(100))
+```
+
+## Understory Vegetation Metrics
+
+Calculate understory metrics at finer 10m resolution (important for browse habitat):
+
+```{r understory-metrics, eval=FALSE}
+# Generate understory metrics for moose
+understory_metrics <- generate_understory_metrics_grid(
+  las_clean,
+  res = 10,
+  species = "moose"  # Adjusts browse height to 0.5-3.5m
+)
+
+# View available metrics
+names(understory_metrics)
+```
+
+**Key understory metrics:**
+- `browse_density_pct` - Percentage of points in browse height range
+- `understory_cover_pct` - Overall understory cover
+- `shrub_density_pct` - Shrub layer (2-8m) density
+- `thermal_cover_score` - Quality of thermal cover
+- `berry_habitat_suitability` - Suitability for berry production
+
+### Visualize Understory
+
+```{r plot-understory, eval=FALSE}
+# Browse density (critical for moose)
+plot(understory_metrics$browse_density_pct,
+     main = "Moose Browse Density (%)",
+     col = viridis::viridis(100))
+
+# Thermal cover
+plot(understory_metrics$thermal_cover_score,
+     main = "Thermal Cover Quality",
+     col = viridis::inferno(100))
+```
+
+## Extract Metrics for AOI
+
+Get summary statistics for your area of interest:
+
+```{r aoi-metrics, eval=FALSE}
+# Extract metrics within AOI polygon
+aoi_summary <- extract_canopy_metrics_aoi(las_clean, aoi, id_field = "name")
+
+# View results
+print(aoi_summary)
+
+# Key statistics
+cat(sprintf("Mean canopy height: %.1f m\n", aoi_summary$height_mean))
+cat(sprintf("Canopy cover: %.1f%%\n", aoi_summary$canopy_cover_pct))
+cat(sprintf("Structural complexity: %.2f\n", aoi_summary$structural_complexity_index))
+```
+
+# Step 4: Detect Individual Trees
+
+## Tree Detection and Segmentation
+
+Use variable window size to detect trees of different sizes:
+
+```{r tree-detection, eval=FALSE}
+# Define variable window function
+# Window increases with tree height (taller trees = larger crowns)
+ws_function <- function(x) {
+  0.05 * x + 1.0  # Linear relationship
+}
+
+# Run complete tree detection pipeline
+tree_results <- detect_segment_trees(
+  las_clean,
+  chm = chm,
+  method = "watershed",  # Watershed segmentation
+  ws = ws_function,
+  hmin = 5,              # Minimum tree height (5m)
+  region = "boreal"      # For DBH estimation
+)
+
+# Extract components
+trees_sf <- tree_results$trees_sf          # Spatial points
+tree_attributes <- tree_results$attributes  # Attribute table
+crowns_raster <- tree_results$crowns       # Crown segmentation
+las_segmented <- tree_results$las          # Point cloud with tree IDs
+```
+
+## Analyze Tree Inventory
+
+```{r tree-analysis, eval=FALSE}
+# Summary statistics
+cat(sprintf("Total trees detected: %d\n", nrow(tree_attributes)))
+cat(sprintf("Mean height: %.1f m (range: %.1f - %.1f m)\n",
+            mean(tree_attributes$height),
+            min(tree_attributes$height),
+            max(tree_attributes$height)))
+cat(sprintf("Mean DBH (estimated): %.1f cm\n",
+            mean(tree_attributes$dbh_estimated)))
+
+# Trees by size class
+size_dist <- calculate_size_distribution(
+  tree_attributes,
+  breaks = c(0, 10, 20, 30, Inf)
+)
+print(size_dist)
+
+# Old-growth indicators (trees >30m)
+old_growth_trees <- identify_old_growth_trees(
+  tree_attributes,
+  height_threshold = 30,
+  dbh_threshold = 50
+)
+
+cat(sprintf("\nOld-growth indicator trees: %d\n", nrow(old_growth_trees)))
+```
+
+## Visualize Trees
+
+```{r plot-trees, eval=FALSE}
+# Plot CHM with tree tops
+plot(chm, main = "Detected Trees", col = terrain.colors(50))
+plot(st_geometry(trees_sf), add = TRUE, pch = 3, col = "red", cex = 0.5)
+
+# Tree height distribution
+ggplot(tree_attributes, aes(x = height)) +
+  geom_histogram(bins = 20, fill = "#2E7D32", color = "white") +
+  geom_vline(xintercept = 30, linetype = "dashed", color = "red", size = 1) +
+  annotate("text", x = 32, y = Inf, label = "Old-growth\nthreshold",
+           hjust = 0, vjust = 1.5, color = "red") +
+  labs(title = "Tree Height Distribution",
+       x = "Height (m)", y = "Number of Trees") +
+  theme_minimal()
+
+# Height vs Crown Diameter
+ggplot(tree_attributes, aes(x = height, y = crown_diameter)) +
+  geom_point(alpha = 0.6, color = "#2E7D32") +
+  geom_smooth(method = "lm", color = "blue") +
+  labs(title = "Tree Height vs Crown Diameter",
+       x = "Height (m)", y = "Crown Diameter (m)") +
+  theme_minimal()
+```
+
+# Step 5: Calculate 3D Crown Metrics
+
+For detailed tree analysis, calculate 3D crown properties:
+
+```{r crown-3d, eval=FALSE}
+# Calculate 3D metrics for all trees
+# (This may take a few minutes)
+crown_metrics_3d <- batch_calculate_crown_metrics(
+  las_segmented,
+  voxel_size = 0.5,
+  parallel = TRUE
+)
+
+# View results
+head(crown_metrics_3d)
+
+# Trees with high porosity (open crowns)
+open_crowns <- crown_metrics_3d %>%
+  filter(porosity > 0.7) %>%
+  arrange(desc(height))
+
+cat(sprintf("Trees with open crowns (>70%% porosity): %d\n", nrow(open_crowns)))
+```
+
+**What this tells us:**
+- **High porosity** = open crown, more light penetration
+- **Low porosity** = dense crown, good thermal cover
+- **Crown asymmetry** = lean direction (wind, slope, competition)
+
+# Step 6: Habitat Suitability Modeling
+
+## Calculate Multi-Species HSI
+
+Calculate habitat suitability for multiple species:
+
+```{r hsi, eval=FALSE}
+# Calculate HSI for moose, caribou, deer, and bear
+hsi_results <- calculate_multispecies_hsi(
+  las_clean,
+  res = 30,  # 30m grid resolution
+  species_list = c("moose", "caribou", "deer", "bear"),
+  output_dir = "output/hsi/"
+)
+
+# Summarize results
+hsi_summary <- summarize_habitat_suitability(hsi_results)
+print(hsi_summary)
+```
+
+## Moose Habitat Analysis
+
+Focus on moose winter habitat:
+
+```{r moose-hsi, eval=FALSE}
+# Extract moose HSI
+moose_hsi <- hsi_results$moose
+
+# Summary statistics
+moose_values <- values(moose_hsi, na.rm = TRUE)
+cat(sprintf("Mean HSI: %.2f\n", mean(moose_values)))
+cat(sprintf("High quality habitat (HSI >0.7): %.1f%%\n",
+            sum(moose_values >= 0.7) / length(moose_values) * 100))
+cat(sprintf("Moderate quality (HSI 0.5-0.7): %.1f%%\n",
+            sum(moose_values >= 0.5 & moose_values < 0.7) / length(moose_values) * 100))
+
+# Plot moose HSI
+plot(moose_hsi,
+     main = "Moose Winter Habitat Suitability",
+     col = viridis::viridis(100),
+     legend = TRUE)
+
+# Add AOI boundary
+plot(st_geometry(aoi), add = TRUE, border = "red", lwd = 2)
+```
+
+## Identify Priority Habitat
+
+Delineate high-quality habitat patches:
+
+```{r priority, eval=FALSE}
+# Identify priority areas (HSI >= 0.7, minimum 1 hectare)
+priority_habitat <- identify_priority_habitat(
+  moose_hsi,
+  threshold = 0.7,
+  min_patch_size = 1  # hectares
+)
+
+# Summary
+cat(sprintf("Priority habitat patches: %d\n", nrow(priority_habitat)))
+cat(sprintf("Total priority area: %.1f ha\n",
+            sum(priority_habitat$area_ha)))
+
+# Plot
+plot(moose_hsi, main = "Priority Moose Habitat",
+     col = gray.colors(100, start = 0.9, end = 0.3))
+plot(st_geometry(priority_habitat), add = TRUE,
+     col = "forestgreen", border = "darkgreen", lwd = 2)
+plot(st_geometry(aoi), add = TRUE,
+     border = "red", lwd = 2)
+legend("topright",
+       legend = c("Priority Habitat (HSI >0.7)", "Area of Interest"),
+       fill = c("forestgreen", NA),
+       border = c("darkgreen", "red"),
+       lwd = c(1, 2))
+```
+
+## Compare with Moose Observations
+
+Validate habitat model with actual moose sightings:
+
+```{r validate, eval=FALSE}
+# Convert observations to spatial points
+moose_sf <- st_as_sf(moose_obs,
+                     coords = c("long", "lat"),
+                     crs = st_crs(las))
+
+# Extract HSI values at observation locations
+moose_obs$hsi <- extract(moose_hsi, moose_sf)[[2]]
+
+# Compare HSI at observed vs random locations
+random_points <- st_sample(st_as_sfc(st_bbox(las)), size = 100)
+random_hsi <- extract(moose_hsi, random_points)[[2]]
+
+# Statistical test
+t.test(moose_obs$hsi, random_hsi)
+
+# Plot comparison
+boxplot(list(
+  "Moose Observations" = moose_obs$hsi,
+  "Random Locations" = random_hsi
+), col = c("forestgreen", "gray"),
+   main = "HSI at Moose Observations vs Random",
+   ylab = "Habitat Suitability Index")
+
+# Expected result: HSI significantly higher at moose observations
+```
+
+# Step 7: 3D Visualization
+
+## Interactive 3D Point Cloud
+
+```{r 3d-cloud, eval=FALSE}
+# Interactive 3D visualization (opens in RGL window)
+plot_3d_point_cloud(
+  las_clean,
+  color_by = "height",
+  sample_pct = 50  # Display 50% of points for speed
+)
+
+# Save snapshot
+save_3d_snapshot("output/3d_habitat_view.png", width = 1200, height = 800)
+```
+
+## 3D Tree Visualization
+
+```{r 3d-trees, eval=FALSE}
+# Visualize trees color-coded by height
+plot_3d_trees(
+  las_segmented,
+  tree_attributes = tree_attributes,
+  color_by = "height",
+  show_ground = FALSE
+)
+
+# Save snapshot
+save_3d_snapshot("output/3d_trees.png", width = 1200, height = 800)
+```
+
+## Cross-Section Profile
+
+```{r cross-section, eval=FALSE}
+# Create vertical cross-section
+# From southwest to northeast corner
+p1 <- c(0, 0)
+p2 <- c(200, 200)
+
+profile_plot <- plot_cross_section(las_clean, p1, p2, width = 5)
+print(profile_plot)
+
+# Save
+ggsave("output/vegetation_profile.png", profile_plot,
+       width = 10, height = 6, dpi = 300)
+```
+
+## Interactive Web Map
+
+```{r web-map, eval=FALSE}
+# Create interactive Leaflet map
+map <- create_interactive_map(
+  moose_hsi,
+  metric_name = "Moose HSI"
+)
+
+# Add moose observations
+map <- map %>%
+  addCircleMarkers(
+    data = moose_sf,
+    color = "red",
+    radius = 5,
+    popup = ~paste("Date:", date)
+  )
+
+# Display
+map
+
+# Save as HTML
+htmlwidgets::saveWidget(map, "output/interactive_habitat_map.html")
+```
+
+# Step 8: Generate Reports
+
+## Complete Report Package
+
+Generate both technical and community reports:
+
+```{r reports, eval=FALSE}
+# Define project information
+project_info <- list(
+  title = "Moose Winter Habitat Assessment - Traditional Territory",
+  community = "Example First Nation",
+  author = "Conservation Ecology Team",
+  species = "moose",
+  study_area_desc = paste(
+    "This assessment covers a 4-hectare area within traditional territory.",
+    "The analysis uses airborne lidar data to characterize forest structure",
+    "and assess habitat quality for moose winter browse."
+  ),
+  key_findings = c(
+    sprintf("High quality moose browse habitat identified covering %.1f hectares",
+            sum(priority_habitat$area_ha)),
+    sprintf("Forest structural diversity is %s with complexity index of %.2f",
+            ifelse(mean(values(canopy_metrics$structural_complexity_index,
+                               na.rm=TRUE)) > 0.6, "high", "moderate"),
+            mean(values(canopy_metrics$structural_complexity_index, na.rm=TRUE))),
+    sprintf("%d old-growth indicator trees (>30m) documented",
+            sum(tree_attributes$height >= 30)),
+    "Excellent browse availability in northern section of study area",
+    "Thermal cover quality rated as good to excellent across most of the area"
+  )
+)
+
+# Compile all results
+results_package <- list(
+  las = las_clean,
+  chm = chm,
+  canopy_metrics = canopy_metrics,
+  understory_metrics = understory_metrics,
+  trees = tree_results,
+  hsi = hsi_results
+)
+
+# Generate complete report package
+report_files <- generate_report_package(
+  results_package,
+  output_dir = "output/reports/",
+  project_info = project_info
+)
+
+# View generated files
+print(report_files)
+```
+
+**Generated files:**
+- `technical_report.pdf` - Full scientific assessment
+- `community_summary.pdf` - Plain language summary with large maps
+- `summary_statistics.csv` - Key metrics table
+- `maps/` - High-resolution habitat maps (PNG)
+- `tree_inventory.csv` - Complete tree inventory
+- `tree_distribution.png` - Tree size distribution plot
+
+## Custom Visualizations for Report
+
+Create additional figures:
+
+```{r custom-viz, eval=FALSE}
+# Vertical structure comparison
+vdr_data <- data.frame(
+  Layer = c("0-2m", "2-8m", "8-16m", "16+m"),
+  Proportion = c(
+    mean(values(canopy_metrics$vdr_ground_2m), na.rm = TRUE),
+    mean(values(canopy_metrics$vdr_2_8m), na.rm = TRUE),
+    mean(values(canopy_metrics$vdr_8_16m), na.rm = TRUE),
+    mean(values(canopy_metrics$vdr_16plus), na.rm = TRUE)
+  )
+)
+
+vdr_plot <- ggplot(vdr_data, aes(x = Layer, y = Proportion, fill = Layer)) +
+  geom_col() +
+  scale_fill_viridis_d() +
+  labs(title = "Vertical Distribution of Vegetation",
+       x = "Height Layer", y = "Proportion of Points") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+ggsave("output/vertical_structure.png", vdr_plot, width = 8, height = 6, dpi = 300)
+```
+
+# Step 9: Batch Processing (Bonus)
+
+For larger areas with multiple tiles:
+
+```{r batch, eval=FALSE}
+# Process entire catalog
+batch_results <- batch_process_catalog(
+  catalog_folder = system.file("extdata/catalog", package = "habitatLidar"),
+  output_folder = "output/batch/",
+  processing_options = list(
+    preprocess = TRUE,
+    canopy_metrics = TRUE,
+    understory_metrics = TRUE,
+    tree_detection = TRUE,
+    hsi_species = c("moose", "caribou")
+  ),
+  n_cores = 4  # Use 4 CPU cores
+)
+
+# View summary
+print(batch_results)
+
+# Mosaic metrics across tiles
+mosaic_hsi <- mosaic_metrics(
+  "output/batch/hsi/",
+  "output/batch/moose_hsi_mosaic.tif",
+  metric_name = "moose"
+)
+```
+
+# Summary and Next Steps
+
+## What We Accomplished
+
+In this tutorial, we:
+
+✅ Loaded and quality-checked lidar data
+✅ Preprocessed with ground classification and normalization
+✅ Calculated 40+ vegetation structure metrics
+✅ Detected and characterized 80+ individual trees
+✅ Modeled habitat suitability for moose (and other species)
+✅ Created 3D visualizations and interactive maps
+✅ Generated professional reports (technical + community)
+
+## Key Results
+
+From our example analysis:
+
+- **Study area**: 4 hectares
+- **Trees detected**: 80+ trees (8-40m height range)
+- **Old-growth indicators**: Several trees >30m
+- **Moose habitat quality**: 65% high-quality (HSI >0.7)
+- **Browse availability**: Excellent in northern area
+- **Structural complexity**: High diversity suitable for multiple species
+
+## Applications
+
+This workflow can be adapted for:
+
+- **Conservation planning**: Identify priority protection areas
+- **IPCA development**: Provide scientific baseline for Indigenous Protected Areas
+- **Forestry planning**: Map sensitive habitat for sustainable harvest
+- **Environmental assessment**: Characterize pre-development conditions
+- **Monitoring**: Track habitat changes over time (multi-temporal analysis)
+- **Species-specific planning**: Customize for caribou, deer, bear, etc.
+
+## Further Resources
+
+- **Package documentation**: `?habitatLidar`
+- **Function help**: `?function_name`
+- **Habitat assessment vignette**: `vignette("habitat_assessment")`
+- **3D visualization guide**: `vignette("3d_visualization")`
+- **GitHub issues**: Report bugs or request features
+
+## Tips for Real-World Use
+
+1. **Data quality is critical**: Always run QC first
+2. **Adjust parameters**: Window sizes, thresholds vary by forest type
+3. **Validate results**: Compare with field data when possible
+4. **Use parallel processing**: Leverage multiple CPU cores for large areas
+5. **Document thoroughly**: Keep track of parameters used
+6. **Engage communities**: Use community reports for meaningful discussions
+
+---
+
+**Congratulations!** You now know how to conduct comprehensive wildlife habitat assessments using lidar data. Happy analyzing! 🌲🦌📊
