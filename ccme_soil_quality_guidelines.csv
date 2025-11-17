@@ -1,0 +1,72 @@
+contaminant,cas_number,contaminant_group,ccme_agricultural_mg_kg,ccme_residential_mg_kg,ccme_commercial_mg_kg,health_concern,uptake_category,typical_mdl_mg_kg,epa_method,notes
+Arsenic,7440-38-2,Metals,12,12,12,Cancer; skin lesions,High,0.5,EPA 3050B + ICP-MS,High uptake in rice and leafy greens
+Cadmium,7440-43-9,Metals,1.4,10,22,Kidney damage,Very High,0.05,EPA 3050B + ICP-MS,Very high uptake in leafy vegetables
+Chromium (Total),7440-47-3,Metals,64,64,87,Cr(VI) carcinogenic,Low,0.5,EPA 3050B + ICP-MS,Request Cr(VI) analysis for industrial sites
+Chromium (VI),18540-29-9,Metals,0.4,0.4,1.4,Cancer,Low,0.05,EPA 7196A,Hexavalent chromium only
+Copper,7440-50-8,Metals,63,63,91,Plant toxicity,Moderate,1,EPA 3050B + ICP-MS,Common fungicide residue in orchards
+Lead,7439-92-1,Metals,70,140,260,Neurotoxic (children),Low,1,EPA 3050B + ICP-MS,Low plant uptake; dust ingestion main risk
+Mercury,7439-97-6,Metals,6.6,6.6,24,Neurotoxic,Low,0.05,EPA 7471B (CVAA),Bioaccumulates in aquatic systems
+Nickel,7440-02-0,Metals,50,50,50,Allergic reactions,Moderate,1,EPA 3050B + ICP-MS,Plant toxicity at high levels
+Zinc,7440-66-6,Metals,200,200,360,Plant toxicity,Moderate,2,EPA 3050B + ICP-MS,Essential nutrient; toxic at high levels
+Antimony,7440-36-0,Metals,20,20,40,Cancer,Low,0.5,EPA 3050B + ICP-MS,Uncommon contaminant
+Barium,7440-39-3,Metals,750,500,2000,Cardiovascular,Low,10,EPA 3050B + ICP-MS,Naturally high in some soils
+Beryllium,7440-41-7,Metals,4,4,8,Lung disease,Low,0.5,EPA 3050B + ICP-MS,Industrial sites
+Cobalt,7440-48-4,Metals,40,40,300,Cardiomyopathy,Moderate,1,EPA 3050B + ICP-MS,Mining areas
+Molybdenum,7439-98-7,Metals,5,40,40,Livestock toxicity,Moderate,1,EPA 3050B + ICP-MS,Agricultural concern
+Selenium,7782-49-2,Metals,1,1,2.9,Livestock toxicity,Moderate,0.5,EPA 3050B + ICP-MS,Narrow safe range
+Silver,7440-22-4,Metals,20,20,40,Argyria (skin discoloration),Low,0.5,EPA 3050B + ICP-MS,Uncommon
+Thallium,7440-28-0,Metals,1,1,1,Neurotoxic,Moderate,0.5,EPA 3050B + ICP-MS,Rare but highly toxic
+Uranium,7440-61-1,Metals,23,23,33,Kidney damage; radioactive,Low,0.5,EPA 3050B + ICP-MS,Mining and phosphate fertilizer areas
+Vanadium,7440-62-2,Metals,130,130,130,Respiratory,Moderate,5,EPA 3050B + ICP-MS,Petroleum and steel sites
+Acenaphthene,83-32-9,PAH,100,100,100,Low toxicity,Low,0.05,EPA 3550/8270,Component of PAH suite
+Acenaphthylene,208-96-8,PAH,100,100,100,Low toxicity,Low,0.05,EPA 3550/8270,Component of PAH suite
+Anthracene,120-12-7,PAH,100,100,100,Low toxicity,Low,0.05,EPA 3550/8270,Component of PAH suite
+Benzo(a)anthracene,56-55-3,PAH,10,10,10,Carcinogenic,Low,0.05,EPA 3550/8270,Carcinogenic PAH
+Benzo(a)pyrene,50-32-8,PAH,0.7,0.7,0.7,Highly carcinogenic,Low,0.05,EPA 3550/8270,Most toxic PAH; marker compound
+Benzo(b)fluoranthene,205-99-2,PAH,10,10,10,Carcinogenic,Low,0.05,EPA 3550/8270,Carcinogenic PAH
+Benzo(k)fluoranthene,207-08-9,PAH,10,10,10,Carcinogenic,Low,0.05,EPA 3550/8270,Carcinogenic PAH
+Benzo(g,h,i)perylene,191-24-2,PAH,100,100,100,Low toxicity,Low,0.05,EPA 3550/8270,Non-carcinogenic PAH
+Chrysene,218-01-9,PAH,100,100,100,Possible carcinogen,Low,0.05,EPA 3550/8270,Component of PAH suite
+Dibenzo(a,h)anthracene,53-70-3,PAH,10,10,10,Carcinogenic,Low,0.05,EPA 3550/8270,Carcinogenic PAH
+Fluoranthene,206-44-0,PAH,100,100,100,Low toxicity,Low,0.05,EPA 3550/8270,Component of PAH suite
+Fluorene,86-73-7,PAH,100,100,100,Low toxicity,Low,0.05,EPA 3550/8270,Component of PAH suite
+Indeno(1,2,3-cd)pyrene,193-39-5,PAH,10,10,10,Carcinogenic,Low,0.05,EPA 3550/8270,Carcinogenic PAH
+Naphthalene,91-20-3,PAH,100,100,100,Respiratory,Low,0.05,EPA 3550/8270,Lightest PAH
+Phenanthrene,85-01-8,PAH,100,100,100,Low toxicity,Low,0.05,EPA 3550/8270,Component of PAH suite
+Pyrene,129-00-0,PAH,100,100,100,Low toxicity,Low,0.05,EPA 3550/8270,Component of PAH suite
+PCBs (total),1336-36-3,PCB,0.5,1.3,13,Cancer; immune effects,Moderate,0.01,EPA 3550/8082,Sum of all congeners
+Aroclor 1016,12674-11-2,PCB,0.5,1.3,13,Cancer; immune effects,Moderate,0.01,EPA 3550/8082,PCB mixture
+Aroclor 1221,11104-28-2,PCB,0.5,1.3,13,Cancer; immune effects,Moderate,0.01,EPA 3550/8082,PCB mixture
+Aroclor 1232,11141-16-5,PCB,0.5,1.3,13,Cancer; immune effects,Moderate,0.01,EPA 3550/8082,PCB mixture
+Aroclor 1242,53469-21-9,PCB,0.5,1.3,13,Cancer; immune effects,Moderate,0.01,EPA 3550/8082,PCB mixture (common)
+Aroclor 1248,12672-29-6,PCB,0.5,1.3,13,Cancer; immune effects,Moderate,0.01,EPA 3550/8082,PCB mixture
+Aroclor 1254,11097-69-1,PCB,0.5,1.3,13,Cancer; immune effects,Moderate,0.01,EPA 3550/8082,PCB mixture (common)
+Aroclor 1260,11096-82-5,PCB,0.5,1.3,13,Cancer; immune effects,Moderate,0.01,EPA 3550/8082,PCB mixture (heavy)
+PHC F1 (C6-C10),NA,Petroleum,210,210,300,Acute toxicity; volatile,Low,5,CCME Tier 1 / GC-FID,Gasoline range
+PHC F2 (C10-C16),NA,Petroleum,150,150,260,Plant toxicity; most mobile,Low,10,CCME Tier 1 / GC-FID,Diesel range (light)
+PHC F3 (C16-C34),NA,Petroleum,300,300,1400,Plant toxicity,Low,20,CCME Tier 1 / GC-FID,Diesel to heavy oil
+PHC F4 (C34+),NA,Petroleum,2800,2800,5600,Limited toxicity,Very Low,50,CCME Tier 1 / GC-FID,Heavy oil; asphalt
+Benzene,71-43-2,VOC,0.03,0.03,3.8,Carcinogenic,Low,0.005,EPA 8260,BTEX component; mobile
+Toluene,108-88-3,VOC,0.37,0.37,1.1,Neurotoxic,Low,0.005,EPA 8260,BTEX component
+Ethylbenzene,100-41-4,VOC,0.082,0.082,5,Possible carcinogen,Low,0.005,EPA 8260,BTEX component
+Xylene (total),1330-20-7,VOC,11,11,34,Neurotoxic,Low,0.01,EPA 8260,BTEX component (sum of isomers)
+Aldrin,309-00-2,OCP,0.7,7,20,Cancer; endocrine,Low,0.005,EPA 3550/8081,Banned; persistent legacy
+Dieldrin,60-57-1,OCP,0.7,0.7,4,Cancer; endocrine,Low,0.005,EPA 3550/8081,Banned; persistent legacy
+DDT (total),50-29-3,OCP,10,10,12,Endocrine; cancer,Low,0.01,EPA 3550/8081,Banned 1972; still detected
+DDE,72-55-9,OCP,10,10,12,Endocrine,Low,0.01,EPA 3550/8081,DDT degradation product
+DDD,72-54-8,OCP,10,10,12,Endocrine,Low,0.01,EPA 3550/8081,DDT degradation product
+Chlordane (total),57-74-9,OCP,2.5,2.5,5.8,Cancer; neurotoxic,Low,0.01,EPA 3550/8081,Banned; persistent
+Heptachlor,76-44-8,OCP,0.7,0.7,4.8,Cancer; endocrine,Low,0.005,EPA 3550/8081,Banned; persistent
+Endrin,72-20-8,OCP,2.5,2.5,23,Neurotoxic,Low,0.005,EPA 3550/8081,Banned; persistent
+Lindane (gamma-HCH),58-89-9,OCP,0.7,0.7,0.9,Cancer; endocrine,Low,0.005,EPA 3550/8081,Restricted use
+Methoxychlor,72-43-5,OCP,10,10,10,Endocrine,Low,0.01,EPA 3550/8081,DDT replacement; also banned
+Endosulfan (total),115-29-7,OCP,3,3,5,Endocrine; neurotoxic,Low,0.01,EPA 3550/8081,Banned 2016 in Canada
+2,3,7,8-TCDD,1746-01-6,Dioxin,0.000004,0.00001,0.00007,Highly carcinogenic,Low,0.000001,EPA 1613,TEQ: Toxic Equivalency
+Dioxins/Furans (total TEQ),NA,Dioxin,0.004,0.01,0.07,Cancer; immune; endocrine,Low,0.000001,EPA 1613,TEQ for 17 congeners
+PFOA (Perfluorooctanoic acid),335-67-1,PFAS,TBD,TBD,TBD,Cancer; liver; endocrine,Moderate,0.002,EPA 1633 / ISO 21675,Under regulatory development
+PFOS (Perfluorooctane sulfonate),1763-23-1,PFAS,TBD,TBD,TBD,Cancer; liver; endocrine,Moderate,0.002,EPA 1633 / ISO 21675,Under regulatory development
+PFAS (total),NA,PFAS,TBD,TBD,TBD,Various,Moderate,NA,EPA 1633 / ISO 21675,24-40 compounds typically analyzed
+Asbestos,1332-21-4,Mineral,NA,10000 fibres/g,NA,Lung cancer; mesothelioma,NA,NA,PLM / TEM,Regulated under occupational health
+Atrazine,1912-24-9,Herbicide,1.8,5.3,5.3,Endocrine,Moderate,0.01,EPA 8141,Triazine herbicide
+2,4-D,94-75-7,Herbicide,4,4,4,Endocrine,Moderate,0.05,EPA 8151,Phenoxy herbicide
+Glyphosate,1071-83-6,Herbicide,TBD,TBD,TBD,Possible carcinogen,Low,0.1,EPA 8321,Widely used; under review

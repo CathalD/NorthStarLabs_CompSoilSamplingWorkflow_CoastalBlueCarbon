@@ -699,6 +699,430 @@ Overall mean reduction: 26.1%
 
 ---
 
+## PART 5: Contaminant Testing for Indigenous Agriculture Restoration
+
+**🎯 Purpose:** Assess soil safety for food production and cultural planting in restoration contexts
+**🛠️ Platform:** R + Laboratory Analysis
+**⏱️ When to use:** When restoring land for Indigenous agriculture, community gardens, or culturally important species
+
+### Overview
+
+Part 5 integrates soil contaminant testing with carbon monitoring to ensure restored lands are safe for growing food, medicines, and culturally important plants. This is critical for Indigenous agriculture restoration where food sovereignty and cultural safety are paramount.
+
+**Key Features:**
+- Risk-based contaminant assessment using Canadian standards (CCME)
+- Integrated sampling protocol (same cores for carbon + contaminants)
+- Food safety interpretation in plain language
+- Crop recommendations based on contaminant profile
+- Remediation planning and cost estimates
+- Cultural food sovereignty considerations
+
+---
+
+### Module 11: Contaminant Risk Assessment and Sampling Design
+
+**File:** `11_contaminant_risk_assessment.R`
+
+**What it does:**
+- Evaluates contamination risk based on site characteristics
+- Recommends which contaminants to test (metals, PAHs, PCBs, etc.)
+- Designs integrated sampling plan with carbon monitoring
+- Estimates laboratory analysis costs
+- Generates risk maps and sampling priorities
+
+**Risk Factors Assessed:**
+- **Proximity**: Roads, urban areas, industrial sites, railways, landfills
+- **Land Use History**: Agriculture (especially orchards), industrial, mining, military
+- **Site Features**: Floodplains, visible contamination, former structures
+- **Cultural Use**: Growing food for vulnerable populations (children, elders)
+
+**Risk Categories:**
+- **HIGH (≥70/100)**: MANDATORY testing - near contamination sources, intensive historical use
+- **MEDIUM (40-69)**: RECOMMENDED testing - moderate risk factors
+- **LOW (15-39)**: CONSIDER testing - precautionary approach
+- **MINIMAL (<15)**: OPTIONAL testing - remote, undisturbed sites
+
+**Inputs:**
+- `data_raw/site_characteristics.csv` - Distances to contamination sources, land use history
+- `data_raw/core_locations.csv` - GPS coordinates from carbon sampling (Module 01)
+- `ccme_soil_quality_guidelines.csv` - Canadian standards reference
+
+**Outputs:**
+```
+diagnostics/contaminant_assessment/
+├── risk_assessment_summary.csv           # Risk scores and categories by site
+├── recommended_analytes.csv              # Which contaminants to test
+├── contaminant_budget_estimate.csv       # Lab cost estimates
+└── risk_summary_report.csv               # Executive summary
+
+outputs/maps/contaminant_risk/
+├── risk_distribution.png                 # Risk score visualization
+└── risk_by_stratum.png                   # Risk by ecosystem stratum
+
+data_processed/contaminant/
+└── integrated_sampling_plan.csv          # Combined carbon + contaminant sampling
+```
+
+**Run:**
+```r
+source("11_contaminant_risk_assessment.R")
+```
+
+**Decision Tree - When to Test:**
+```
+START: Planning Indigenous agriculture restoration
+
+Known clean site with documentation?
+  ├─ YES → Proceed with baseline testing only (optional)
+  └─ NO → Continue
+
+Within 500m of urban/industrial development?
+  ├─ YES → HIGH PRIORITY - Test Core Suite (8 metals minimum)
+  └─ NO → Continue
+
+Within 100m of roads/railways?
+  ├─ YES → HIGH PRIORITY - Test Metals + PAHs + Hydrocarbons
+  └─ NO → Continue
+
+Agricultural history (especially orchard)?
+  ├─ YES → MEDIUM-HIGH PRIORITY - Test Metals + Pesticides
+  └─ NO → Continue
+
+Uncertain land-use history?
+  ├─ YES → MEDIUM PRIORITY - Test Core Suite
+  └─ NO → Continue
+
+Growing food for community consumption?
+  ├─ YES → PRECAUTIONARY - Test at least Priority Metals
+  └─ NO → Baseline testing optional
+```
+
+---
+
+### Module 12: Contaminant Data Processing and Interpretation
+
+**File:** `12_contaminant_data_processing.R`
+
+**What it does:**
+- Processes laboratory contaminant results
+- Compares concentrations to CCME Soil Quality Guidelines
+- Generates food safety assessments by site
+- Recommends suitable crops based on contaminant profile
+- Prioritizes remediation actions
+- Creates plain-language reports for community decision-making
+
+**CCME Standards Reference:**
+
+The Canadian Council of Ministers of the Environment (CCME) provides risk-based Soil Quality Guidelines for:
+- **Agricultural Land Use** - Protects human health via food consumption
+- **Residential/Parkland** - Protects direct soil contact (children)
+- **Commercial/Industrial** - Not appropriate for food production
+
+**Key CCME Agricultural Guidelines (mg/kg):**
+
+| **Contaminant** | **Guideline** | **Health Concern** | **Common Sources** |
+|----------------|--------------|-------------------|-------------------|
+| **Arsenic** | 12 | Cancer, skin lesions | Pesticides, pressure-treated wood, mining |
+| **Cadmium** | 1.4 | Kidney damage | Fertilizers, industrial sources |
+| **Lead** | 70 | Neurotoxic (children) | Paint, gasoline, industrial |
+| **Mercury** | 6.6 | Neurotoxic | Mining, industry, fungicides |
+| **PAHs** | 10 (total) | Cancer | Coal tar, creosote, combustion |
+| **PCBs** | 0.5 | Cancer, immune | Electrical equipment, industrial |
+| **Petroleum (F2)** | 150 | Plant toxicity | Fuel storage, roads |
+
+**Inputs:**
+- `data_raw/contaminant_lab_results.csv` - Laboratory analytical data
+- `ccme_soil_quality_guidelines.csv` - Standards reference
+- `diagnostics/contaminant_assessment/risk_assessment_summary.csv` - Risk context (Module 11)
+
+**Outputs:**
+```
+data_processed/contaminant/
+├── contaminant_results_clean.csv         # Cleaned lab data with QA/QC flags
+├── ccme_comparison.csv                   # Results vs. CCME guidelines
+└── exceedances_summary.csv               # Flagged contaminants above guidelines
+
+outputs/reports/contaminant/
+├── food_safety_summary.csv               # Site-level pass/fail assessment
+├── crop_recommendations.csv              # Suitable crops by site
+└── remediation_priorities.csv            # Action plan with cost estimates
+
+outputs/maps/contaminant_results/
+├── exceedance_summary.png                # Contaminants exceeding guidelines
+├── depth_profiles_exceedances.png        # Contamination vs. depth
+└── site_safety_summary.png               # Food safety by stratum
+```
+
+**Run:**
+```r
+source("12_contaminant_data_processing.R")
+```
+
+**Interpretation Framework:**
+
+```
+IF concentration < CCME guideline:
+  → ✓ SAFE for agricultural use
+  → Proceed with restoration, all crops suitable
+
+IF concentration = 1-2x CCME guideline:
+  → ⚠ CAUTION zone
+  → Avoid high-uptake crops (leafy greens, root vegetables)
+  → Consider raised beds with clean soil
+
+IF concentration > 2x CCME guideline:
+  → ✗ UNSAFE for food production
+  → Remediation required before planting
+  → Or restrict to non-food plants (ecological restoration only)
+```
+
+**Crop Recommendations by Contaminant:**
+
+| **Contaminant Concern** | **Avoid (High Uptake)** | **Suitable (Low Uptake)** |
+|------------------------|------------------------|--------------------------|
+| **Cadmium** | Leafy greens, root vegetables | Tree fruits, berries, grains |
+| **Lead** | Leafy greens, root vegetables | Tree fruits (fruit flesh) |
+| **Arsenic** | Rice, leafy greens | Berries, tree fruits |
+| **Copper** | Leafy greens | Tree fruits, berries |
+
+---
+
+### Integrated Sampling Protocol (Carbon + Contaminants)
+
+**One Core, Multiple Analyses:**
+
+The workflow enables efficient co-collection where a single soil core serves BOTH carbon monitoring (VM0033 compliance) and contaminant assessment:
+
+**Step 1: Extract standard carbon core (0-100 cm)**
+
+**Step 2: For each depth interval, create subsamples:**
+
+```
+┌─────────────────────────────────┐
+│  MASTER CORE (one extraction)   │
+└─────────────────────────────────┘
+           ↓
+    [Homogenize depth interval]
+           ↓
+    ┌──────────────┴──────────────┐
+    │                             │
+    ▼                             ▼
+[Subsample 1]               [Subsample 2]
+CARBON ANALYSIS             CONTAMINANT ANALYSIS
+(~500g)                     (~250g)
+│                           │
+├─ SOC concentration        ├─ Metals
+├─ Bulk density             ├─ PAHs
+├─ Texture                  ├─ Petroleum hydrocarbons
+├─ pH                       └─ PCBs (if required)
+└─ Nutrients
+```
+
+**Depths for Contaminant Sampling:**
+
+| **Crop Type** | **Primary Depth** | **Why?** |
+|--------------|------------------|----------|
+| Leafy greens | 0-15 cm | Main uptake zone; dust pathway |
+| Root vegetables | 0-30 cm | Rooting zone for carrots, potatoes |
+| Berries/shrubs | 0-50 cm | Feeder root zone |
+| Trees | 0-50 cm + 50-100 cm | Deep roots; long-term assessment |
+| Medicines (herbs) | 0-30 cm | Variable rooting; precautionary |
+
+**VM0033 Integration:**
+- Carbon sampling already goes to 100 cm → contaminant subsamples add minimal field effort
+- Use same field day, crew, and equipment
+- Shared costs for mobilization and sample transport
+
+**Composite Sampling Strategy:**
+
+For cost reduction during initial screening:
+- Combine 5-10 subsamples within each stratum
+- Creates one composite sample per stratum per depth
+- Reduces lab costs by 80-90%
+
+**When to use discrete samples:**
+- Hotspot investigation (visible contamination)
+- Detailed risk assessment for high-value areas
+- Regulatory requirements
+
+---
+
+### Comprehensive Guidance Document
+
+**File:** `CONTAMINANT_TESTING_GUIDE.md`
+
+A 60+ page practitioner-friendly guide covering:
+
+**Section 1: When to Test for Contaminants**
+- Risk-based decision trees
+- Priority scoring system
+- Proximity triggers (roads, urban, industrial)
+
+**Section 2: What Contaminants to Test**
+- Core Suite: 8 priority metals (always test for high-risk sites)
+- Extended Suite: PAHs, PCBs, petroleum hydrocarbons
+- Agricultural Legacy: Organochlorine pesticides, herbicides
+- Emerging: PFAS (fire training areas, landfills)
+
+**Section 3: CCME Standards Interpretation**
+- Agricultural vs. Residential guidelines
+- Plain-language threshold explanations
+- Provincial variations (BC, AB, ON)
+
+**Section 4: Integrated Sampling Protocol**
+- Field equipment checklist
+- Step-by-step co-collection procedure
+- Container requirements by analyte
+- Decontamination protocols
+- Sample preservation and holding times
+
+**Section 5: Laboratory Selection**
+- Required accreditations (ISO 17025, CALA)
+- Recommended labs in Canada
+- Standard analysis packages and costs
+- Detection limit requirements
+
+**Section 6: Interpreting Results**
+- Step-by-step result interpretation
+- Bioavailability considerations
+- Crop-specific risk assessment
+- Decision matrices for action
+
+**Section 7: Restoration Planning**
+- Scenario-based action plans (clean, marginal, contaminated)
+- Remediation options and costs
+- Phytoremediation strategies
+- Soil amendment recommendations
+
+**Section 8: Cultural and Food Sovereignty Considerations**
+- Community engagement approaches
+- Transparent communication of results
+- Prioritizing culturally important species
+- Precautionary approach for vulnerable populations
+
+**Access:**
+```bash
+# View guide
+cat CONTAMINANT_TESTING_GUIDE.md
+
+# Or open in markdown viewer
+```
+
+---
+
+### Example Workflow (Full Integration)
+
+**Scenario:** Restoring 5 ha of salt marsh for Indigenous community garden + carbon credits
+
+**Step 1: Risk Assessment (Module 11)**
+```r
+# Create site characteristics file
+# Fill in: distances to roads, historical land use, etc.
+source("11_contaminant_risk_assessment.R")
+
+# Output:
+#   - 2 sites = HIGH risk (near old orchard)
+#   - 3 sites = MEDIUM risk (urban-adjacent)
+#   - Recommended: Test metals + organochlorine pesticides
+#   - Estimated cost: $2,500 CAD
+```
+
+**Step 2: Integrated Field Sampling (Module 01 + 11)**
+```r
+# Use carbon sampling locations (Module 01)
+# Co-collect subsamples for contaminants:
+#   - Depths: 0-15 cm, 15-30 cm (food safety focus)
+#   - Composite within strata (3 composite samples total)
+#   - Send to ALS Environmental (accredited lab)
+```
+
+**Step 3: Process Results (Module 12)**
+```r
+# Load lab results
+source("12_contaminant_data_processing.R")
+
+# Output:
+#   - Site A (old orchard): Arsenic 15.2 mg/kg → EXCEEDANCE
+#   - Action: Avoid leafy greens; plant berries (low uptake)
+#   - Site B & C: All compliant → Proceed with all crops
+```
+
+**Step 4: Restoration Implementation**
+- Site A: Plant blueberries, salal, tree fruits (low As uptake)
+- Site A: Add compost + iron amendments (immobilize As)
+- Sites B & C: Full diversity planting (vegetables, herbs, medicines)
+- Document baseline for 5-year MMRV cycle
+
+**Result:**
+- Safe food production confirmed
+- Community confidence in land restoration
+- Integrated monitoring (carbon + contaminants)
+- Cost-effective (shared sampling effort)
+
+---
+
+### Cost-Benefit Analysis: Integrated vs. Separate Sampling
+
+**Traditional Approach (Separate Campaigns):**
+```
+Carbon Sampling:
+  - Field crew: 2 days
+  - Lab costs: $3,000
+
+Contaminant Sampling (separate trip):
+  - Field crew: 2 days
+  - Lab costs: $2,500
+  - Travel/accommodation: $1,500
+
+Total: $7,000 + 4 field days
+```
+
+**Integrated Approach (This Workflow):**
+```
+Combined Sampling:
+  - Field crew: 2 days (co-collect subsamples)
+  - Lab costs: $5,500 ($3,000 carbon + $2,500 contaminants)
+  - Travel/accommodation: $0 (shared)
+
+Total: $5,500 + 2 field days
+
+Savings: $1,500 (21%) + 2 field days
+```
+
+**Additional Benefits:**
+- Same GPS coordinates for both datasets → perfect spatial alignment
+- Single mobilization → lower carbon footprint
+- Faster results → accelerate restoration timeline
+- Better data quality → identical sampling conditions
+
+---
+
+### Compliance with Indigenous Food Sovereignty Principles
+
+This contaminant testing integration aligns with:
+
+**UN Declaration on the Rights of Indigenous Peoples (UNDRIP):**
+- Article 20: Right to traditional food security
+- Article 29: Right to conservation and protection of traditional lands
+
+**First Nations Food, Nutrition and Environment Study (FNFNES):**
+- Precautionary approach to food safety
+- Community-led decision-making
+- Transparent communication of risks
+
+**Truth and Reconciliation Commission Calls to Action:**
+- Call 18: Recognition of Indigenous food security rights
+- Call 92: Corporate sector role in supporting Indigenous economic development
+
+**Practical Implementation:**
+- Share all results in plain language
+- Community meetings to interpret findings
+- Engage Elders in crop selection decisions
+- Prioritize culturally significant species in clean areas
+- Respect traditional knowledge about plant health
+
+---
+
 ## 🚀 Quick Start
 
 ### Minimum Workflow (No Bayesian)

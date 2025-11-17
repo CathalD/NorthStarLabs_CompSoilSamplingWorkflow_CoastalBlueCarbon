@@ -382,6 +382,84 @@ convert_units <- function(value, from, to) {
 }
 
 # ============================================================================
+# CONTAMINANT TESTING PARAMETERS (Modules 11-12)
+# ============================================================================
+
+# Enable contaminant assessment workflow
+ENABLE_CONTAMINANT_TESTING <- TRUE  # Set to FALSE to skip contaminant modules
+
+# CCME standards reference file
+CCME_STANDARDS_FILE <- "ccme_soil_quality_guidelines.csv"
+
+# Land use category for CCME comparison
+# Options: "agricultural", "residential", "commercial"
+CCME_LAND_USE_CATEGORY <- "agricultural"  # Use agricultural for food production sites
+
+# Risk assessment thresholds (0-100 scale)
+RISK_THRESHOLD_HIGH <- 70      # Score >= 70 = HIGH risk (mandatory testing)
+RISK_THRESHOLD_MEDIUM <- 40    # Score >= 40 = MEDIUM risk (recommended)
+RISK_THRESHOLD_LOW <- 15       # Score >= 15 = LOW risk (consider)
+
+# Contaminant sampling depths (cm) - usually shallower than carbon sampling
+# Focus on food crop rooting zones
+CONTAMINANT_DEPTHS_CM <- c(
+  surface = c(0, 15),      # Most critical for leafy greens, dust pathway
+  shallow = c(15, 30),     # Root vegetables, herbs
+  medium = c(30, 50)       # Deep-rooted crops, shrubs
+)
+
+# Food safety buffer factor (precautionary approach)
+# Multiply CCME guideline by this factor for stricter threshold
+# 1.0 = use CCME as-is, 0.5 = use 50% of CCME (more conservative)
+FOOD_SAFETY_BUFFER <- 1.0  # Standard CCME compliance
+
+# Exceedance categories
+EXCEEDANCE_MAJOR_RATIO <- 2.0      # >2x guideline = major exceedance
+EXCEEDANCE_MINOR_RATIO <- 1.0      # 1-2x guideline = exceedance
+EXCEEDANCE_APPROACHING_RATIO <- 0.5  # 0.5-1x guideline = approaching
+
+# Crop sensitivity database (simplified)
+# Used to generate crop recommendations based on contaminant profile
+CROP_SENSITIVITY_DATA <- data.frame(
+  crop_type = c("Leafy Greens", "Root Vegetables", "Berries", "Tree Fruits", "Grains", "Herbs/Medicines"),
+  cadmium_sensitivity = c("High", "High", "Medium", "Low", "Medium", "Medium"),
+  lead_sensitivity = c("Medium", "Medium", "Low", "Low", "Low", "Medium"),
+  arsenic_sensitivity = c("High", "Medium", "Low", "Low", "Medium", "Medium"),
+  stringsAsFactors = FALSE
+)
+
+# Lab cost estimates (CAD, 2024 rates)
+# Used for budget planning in Module 11
+LAB_COST_ESTIMATES <- list(
+  metals_core_8 = 120,
+  metals_extended = 200,
+  pahs = 180,
+  pcbs = 200,
+  phc_f1_f4 = 150,
+  vocs = 180,
+  ocps = 250,
+  herbicides = 200,
+  pfas = 500,
+  overhead_pct = 0.15,
+  qaqc_pct = 0.10
+)
+
+# Remediation cost estimates (CAD per m², 2024 rates)
+REMEDIATION_COST_ESTIMATES <- list(
+  excavation_shallow = 30,   # 0-30 cm removal and replacement
+  excavation_deep = 50,      # 0-50 cm removal
+  raised_bed = 40,           # 60 cm raised bed construction
+  soil_amendment = 15,       # Lime, compost, biochar
+  phytoremediation = 5       # Annual cost for hyperaccumulator plants
+)
+
+# Report generation preferences
+CONTAMINANT_REPORT_LANGUAGE <- "plain"  # "plain" = practitioner-friendly, "technical" = detailed
+INCLUDE_CROP_RECOMMENDATIONS <- TRUE
+INCLUDE_REMEDIATION_ESTIMATES <- TRUE
+INCLUDE_CULTURAL_GUIDANCE <- TRUE  # Indigenous food sovereignty considerations
+
+# ============================================================================
 # SESSION TRACKING
 # ============================================================================
 
