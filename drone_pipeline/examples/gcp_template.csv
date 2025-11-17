@@ -1,0 +1,22 @@
+# Ground Control Points Template
+# Format: gcp_id, latitude, longitude, elevation_m
+# Use high-precision GPS (RTK or survey-grade) to collect GCP coordinates
+# Place at least 5 GCPs distributed throughout survey area
+# Mark GCPs with visible targets (checkerboard panels, painted markers)
+#
+# Example coordinates (replace with your actual GCP measurements):
+
+gcp_id,latitude,longitude,elevation_m
+GCP_001,49.2827,-123.1207,125.34
+GCP_002,49.2835,-123.1195,126.12
+GCP_003,49.2842,-123.1210,124.87
+GCP_004,49.2838,-123.1222,125.56
+GCP_005,49.2830,-123.1218,125.91
+
+# Notes:
+# - GCP coordinates must be in WGS84 (EPSG:4326) decimal degrees
+# - Elevation in meters above sea level
+# - More GCPs = higher accuracy (10-15 recommended for large areas)
+# - Distribute GCPs around perimeter and center of survey area
+# - Avoid clustering GCPs in one corner
+# - GCPs improve absolute positional accuracy but not required for relative measurements

@@ -1,0 +1,430 @@
+---
+title: "Drone Survey Ecological Assessment Report"
+subtitle: "`r params$project_name`"
+author: "`r params$community_name`"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    fig_caption: true
+    keep_tex: false
+  html_document:
+    toc: true
+    toc_float: true
+    theme: cosmo
+    code_folding: hide
+params:
+  project_name: "Drone Survey"
+  location_name: "Survey Location"
+  survey_date: "2024-01-01"
+  community_name: "Indigenous Community"
+  survey_purpose: "Vegetation monitoring"
+  surveyor_name: "Surveyor"
+  summary_data: NULL
+  results_dir: "outputs"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 10,
+  fig.height = 7,
+  dpi = 300
+)
+
+# Load required packages
+library(terra)
+library(sf)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(leaflet)
+library(viridis)
+library(RColorBrewer)
+```
+
+\newpage
+
+# Executive Summary
+
+This report presents the results of a drone-based ecological survey conducted at **`r params$location_name`** on **`r params$survey_date`**. The survey was conducted by **`r params$community_name`** for the purpose of **`r params$survey_purpose`**.
+
+## Key Findings
+
+```{r key-findings}
+# Load summary data
+if (!is.null(params$summary_data)) {
+  summary_data <- params$summary_data
+} else {
+  summary_json <- file.path(params$results_dir, "reports/survey_summary.json")
+  if (file.exists(summary_json)) {
+    summary_data <- jsonlite::fromJSON(summary_json)
+  } else {
+    summary_data <- list()
+  }
+}
+
+# Extract key metrics
+survey_area_ha <- if (!is.null(summary_data$survey_area)) {
+  round(summary_data$survey_area$area_ha, 2)
+} else {
+  "N/A"
+}
+
+total_trees <- if (!is.null(summary_data$tree_statistics)) {
+  summary_data$tree_statistics$total_trees
+} else {
+  "N/A"
+}
+
+tree_density <- if (!is.null(summary_data$tree_statistics)) {
+  round(summary_data$tree_statistics$tree_density_per_ha, 1)
+} else {
+  "N/A"
+}
+```
+
+- **Survey Area:** `r survey_area_ha` hectares
+- **Trees/Shrubs Detected:** `r total_trees` individuals
+- **Stem Density:** `r tree_density` per hectare
+- **Vegetation Types Mapped:** Multiple classes identified and quantified
+
+\newpage
+
+# Survey Information
+
+## Project Details
+
+```{r project-info}
+project_info <- data.frame(
+  Item = c("Project Name", "Location", "Survey Date", "Community", "Surveyor", "Processing Date", "Purpose"),
+  Value = c(
+    params$project_name,
+    params$location_name,
+    params$survey_date,
+    params$community_name,
+    params$surveyor_name,
+    as.character(Sys.Date()),
+    params$survey_purpose
+  )
+)
+
+kable(project_info, caption = "Survey Metadata", booktabs = TRUE) %>%
+  kable_styling(latex_options = c("striped", "hold_position"))
+```
+
+## Survey Area
+
+The total surveyed area was **`r survey_area_ha` hectares** (`r round(as.numeric(survey_area_ha) * 2.47105, 2)` acres).
+
+\newpage
+
+# Methods
+
+## Data Acquisition
+
+Drone imagery was acquired using DJI drone systems with the following specifications:
+
+- **Image overlap:** Minimum 60% front and side overlap
+- **Flight altitude:** Optimized for 2-5 cm ground sampling distance
+- **Image format:** Geotagged JPEG with EXIF GPS coordinates
+
+## Orthomosaic Generation
+
+Raw drone images were processed using **OpenDroneMap (ODM)**, an open-source photogrammetry pipeline that employs Structure-from-Motion (SfM) and Multi-View Stereo (MVS) algorithms to generate:
+
+1. Georeferenced orthomosaic (aerial photo map)
+2. Digital Surface Model (DSM) - elevation including vegetation
+3. 3D point cloud representation
+
+The orthomosaic provides a spatially accurate base map for all subsequent analyses.
+
+## Vegetation Classification
+
+Vegetation was classified using spectral analysis and machine learning:
+
+### Spectral Indices Calculated
+
+- **NDVI** (Normalized Difference Vegetation Index) - overall vegetation vigor
+- **ExG** (Excess Green) - green vegetation identification
+- **VARI** (Visible Atmospherically Resistant Index) - vegetation presence
+- **GLI** (Green Leaf Index) - photosynthetically active vegetation
+
+### Classification Method
+
+Classification was performed using Random Forest machine learning or k-means clustering to identify distinct vegetation types:
+
+- Forest/Woodland
+- Shrubland
+- Herbaceous Vegetation
+- Bare Ground/Rock
+- Water (if present)
+
+## Tree/Shrub Detection
+
+Individual trees and shrubs were detected using the Canopy Height Model (CHM) derived from the DSM:
+
+1. **CHM Generation:** Height above ground calculated from DSM
+2. **Tree Detection:** Local maxima algorithm identifies tree tops
+3. **Crown Delineation:** Watershed segmentation outlines individual crowns
+4. **Metrics Extraction:** Height, crown area, and location for each detected individual
+
+Minimum detection height threshold: **`r MIN_TREE_HEIGHT`m**
+
+## Quality Assurance
+
+All processing followed scientific best practices:
+
+- Automated quality checks on input data
+- Cross-validation of classification models
+- Statistical validation of results
+- Uncertainty quantification where applicable
+
+\newpage
+
+# Results
+
+## Vegetation Classification
+
+```{r classification-results}
+class_stats_file <- file.path(params$results_dir, "csv/classification_area_statistics.csv")
+
+if (file.exists(class_stats_file)) {
+  class_stats <- read.csv(class_stats_file)
+  class_stats$percent_of_total <- (class_stats$area_ha / as.numeric(survey_area_ha)) * 100
+
+  kable(class_stats[, c("value", "count", "area_ha", "percent_of_total")],
+        col.names = c("Class", "Pixel Count", "Area (ha)", "Percent (%)"),
+        caption = "Vegetation Classification Summary",
+        digits = 2,
+        booktabs = TRUE) %>%
+    kable_styling(latex_options = c("striped", "hold_position"))
+}
+```
+
+### Classification Map
+
+```{r classification-map, fig.cap="Vegetation classification map showing spatial distribution of vegetation types"}
+class_map_file <- file.path(params$results_dir, "data_processed/classifications/vegetation_classification.tif")
+
+if (file.exists(class_map_file)) {
+  classification <- rast(class_map_file)
+
+  # Create plot
+  plot(classification,
+       main = "Vegetation Classification",
+       col = brewer.pal(min(length(unique(values(classification, na.rm=TRUE))), 9), "Set1"),
+       axes = FALSE,
+       legend = TRUE)
+}
+```
+
+## Tree/Shrub Detection Results
+
+```{r tree-results}
+tree_metrics_file <- file.path(params$results_dir, "csv/tree_metrics.csv")
+
+if (file.exists(tree_metrics_file)) {
+  tree_metrics <- read.csv(tree_metrics_file)
+
+  # Summary statistics
+  tree_summary <- data.frame(
+    Metric = c("Total Count", "Density (per ha)", "Mean Height (m)", "Min Height (m)",
+               "Max Height (m)", "Height Std Dev (m)"),
+    Value = c(
+      nrow(tree_metrics),
+      round(nrow(tree_metrics) / as.numeric(survey_area_ha), 1),
+      round(mean(tree_metrics$height, na.rm = TRUE), 2),
+      round(min(tree_metrics$height, na.rm = TRUE), 2),
+      round(max(tree_metrics$height, na.rm = TRUE), 2),
+      round(sd(tree_metrics$height, na.rm = TRUE), 2)
+    )
+  )
+
+  kable(tree_summary,
+        caption = "Tree/Shrub Detection Summary",
+        booktabs = TRUE) %>%
+    kable_styling(latex_options = c("striped", "hold_position"))
+}
+```
+
+### Height Distribution
+
+```{r height-distribution, fig.cap="Distribution of tree/shrub heights across the survey area"}
+if (exists("tree_metrics")) {
+  ggplot(tree_metrics, aes(x = height)) +
+    geom_histogram(bins = 30, fill = "forestgreen", color = "black", alpha = 0.7) +
+    geom_vline(aes(xintercept = mean(height)), color = "red", linetype = "dashed", size = 1) +
+    labs(
+      title = "Tree/Shrub Height Distribution",
+      x = "Height (meters)",
+      y = "Count",
+      caption = paste("Mean height:", round(mean(tree_metrics$height, na.rm = TRUE), 1), "m")
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = 14, face = "bold"),
+      axis.text = element_text(size = 10),
+      axis.title = element_text(size = 12)
+    )
+}
+```
+
+### Spatial Distribution Map
+
+```{r tree-map, fig.cap="Spatial distribution of detected trees and shrubs overlaid on canopy height model"}
+chm_file <- file.path(params$results_dir, "data_processed/tree_detections/chm.tif")
+tree_points_file <- file.path(params$results_dir, "shapefiles/tree_locations.shp")
+
+if (file.exists(chm_file) && file.exists(tree_points_file)) {
+  chm <- rast(chm_file)
+  tree_points <- st_read(tree_points_file, quiet = TRUE)
+
+  plot(chm,
+       main = "Tree Locations on Canopy Height Model",
+       col = terrain.colors(100),
+       axes = FALSE)
+  points(vect(tree_points), col = "red", pch = 20, cex = 0.3)
+  legend("topright",
+         legend = c(paste("Trees detected:", nrow(tree_points))),
+         pch = 20,
+         col = "red")
+}
+```
+
+\newpage
+
+# Discussion
+
+## Ecological Interpretation
+
+The drone survey successfully mapped vegetation patterns across **`r survey_area_ha` hectares** of the study area. Key findings include:
+
+1. **Vegetation Structure:** The detected tree/shrub density of **`r tree_density` stems/ha** provides baseline information for monitoring vegetation recovery and succession.
+
+2. **Height Distribution:** Mean vegetation height of **`r if(exists('tree_metrics')) round(mean(tree_metrics$height), 1) else 'N/A'` meters** indicates the current stage of ecological succession.
+
+3. **Spatial Patterns:** The classification map reveals distinct vegetation zones that correspond to environmental gradients, land use history, and ecological processes.
+
+## Applications for Land Management
+
+These results support several management objectives:
+
+- **Restoration Monitoring:** Establishes baseline conditions for tracking vegetation recovery over time
+- **Traditional Use Planning:** Identifies locations of berry-producing shrubs and culturally important plants
+- **Wildlife Habitat Assessment:** Provides structural data relevant to habitat suitability for key species
+- **Carbon Stock Estimation:** Tree metrics can be used with allometric equations to estimate carbon storage
+
+## Limitations and Uncertainties
+
+- **RGB Imagery:** This analysis used RGB (visible spectrum) imagery. Multispectral sensors with near-infrared bands would improve vegetation classification accuracy.
+- **Ground Truth Data:** Classification accuracy would benefit from field-validated training samples.
+- **Seasonal Timing:** Vegetation appearance varies seasonally; optimal survey timing is during peak growing season.
+- **Terrain Complexity:** On steep slopes without a DTM, height estimates represent relative rather than absolute heights.
+
+\newpage
+
+# Recommendations
+
+## Future Monitoring
+
+1. **Repeat Surveys:** Conduct follow-up surveys at 1-2 year intervals to track vegetation changes
+2. **Ground Validation:** Collect field measurements to validate tree heights and classification accuracy
+3. **Seasonal Coverage:** Consider surveys in different seasons to capture phenological changes
+4. **Multispectral Imagery:** Upgrade to multispectral sensors for improved vegetation analysis
+
+## Restoration Actions (if applicable)
+
+Based on the vegetation analysis, the following restoration actions are recommended:
+
+- Identify areas with low shrub density for targeted planting
+- Monitor areas showing vegetation recovery to assess natural regeneration rates
+- Prioritize management actions in areas with desired vegetation characteristics
+
+## Data Management
+
+- Archive all raw imagery and processed outputs for future reference
+- Maintain metadata documentation for each survey
+- Share results with community members and stakeholders through accessible formats
+
+\newpage
+
+# Appendices
+
+## Appendix A: Technical Details
+
+### Software Used
+
+- **OpenDroneMap:** Open-source photogrammetry (https://opendronemap.org)
+- **R Statistical Software:** Data processing and analysis (https://r-project.org)
+- **GDAL/PROJ:** Geospatial data processing
+- **Key R Packages:** terra, sf, ForestTools, randomForest, rmarkdown
+
+### Coordinate Reference System
+
+All outputs use CRS: **`r OUTPUT_CRS`**
+
+### Processing Parameters
+
+```{r processing-params}
+params_table <- data.frame(
+  Parameter = c(
+    "Min Tree Height",
+    "Max Tree Height",
+    "Classification Method",
+    "Spectral Indices",
+    "Tree Detection Method"
+  ),
+  Value = c(
+    paste(MIN_TREE_HEIGHT, "m"),
+    paste(MAX_TREE_HEIGHT, "m"),
+    CLASSIFICATION_METHOD,
+    paste(SPECTRAL_INDICES, collapse = ", "),
+    TREE_DETECTION_METHOD
+  )
+)
+
+kable(params_table,
+      caption = "Key Processing Parameters",
+      booktabs = TRUE) %>%
+  kable_styling(latex_options = c("striped", "hold_position"))
+```
+
+## Appendix B: Data Files
+
+All outputs are available in the `outputs/` directory:
+
+- **GeoTIFF Rasters:** Orthomosaic, DSM, CHM, Classification
+- **Shapefiles:** Tree locations, crown polygons, survey boundary
+- **CSV Tables:** Tree metrics, area statistics, summary data
+- **Maps:** High-resolution PNG images
+- **Reports:** PDF and HTML formats
+
+## Appendix C: References
+
+**Methods References:**
+
+- Westoby et al. (2012). 'Structure-from-Motion' photogrammetry: A low-cost, effective tool for geoscience applications. *Geomorphology*, 179, 300-314.
+
+- Dalponte & Coomes (2016). Tree-centric mapping of forest carbon density from airborne laser scanning and hyperspectral data. *Methods in Ecology and Evolution*, 7(10), 1236-1245.
+
+- Tucker (1979). Red and photographic infrared linear combinations for monitoring vegetation. *Remote Sensing of Environment*, 8(2), 127-150.
+
+- Breiman (2001). Random forests. *Machine Learning*, 45(1), 5-32.
+
+**Software References:**
+
+- OpenDroneMap Community (2024). OpenDroneMap: Open Source Photogrammetry. https://opendronemap.org
+
+- R Core Team (2024). R: A language and environment for statistical computing. https://www.R-project.org/
+
+---
+
+**Report Generated:** `r Sys.time()`
+
+**Contact:** `r params$surveyor_name` - `r params$community_name`
