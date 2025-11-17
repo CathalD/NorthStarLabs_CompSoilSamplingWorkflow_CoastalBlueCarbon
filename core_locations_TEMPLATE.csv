@@ -1,10 +1,10 @@
-core_id,longitude,latitude,stratum,core_type,paired_with,scenario_type,monitoring_year
-HR_001,-123.456,48.123,Mid Marsh,HR,COMP_001,PROJECT,2024
-COMP_001,-123.456,48.123,Mid Marsh,Paired Composite,HR_001,PROJECT,2024
-HR_002,-123.457,48.124,Lower Marsh,HR,COMP_002,PROJECT,2024
-COMP_002,-123.457,48.124,Lower Marsh,Paired Composite,HR_002,PROJECT,2024
-COMP_003,-123.458,48.125,Upper Marsh,Unpaired Composite,NA,PROJECT,2024
-COMP_004,-123.459,48.126,Underwater Vegetation,Unpaired Composite,NA,PROJECT,2024
-BASE_HR_001,-123.460,48.127,Mid Marsh,HR,BASE_COMP_001,BASELINE,2024
-BASE_COMP_001,-123.460,48.127,Mid Marsh,Paired Composite,BASE_HR_001,BASELINE,2024
-BASE_COMP_002,-123.461,48.128,Lower Marsh,Unpaired Composite,NA,BASELINE,2024
+core_id,longitude,latitude,stratum,core_type,paired_with,scenario_type,monitoring_year,water_table_cm,peat_depth_cm,drainage_status
+HR_001,-105.234,54.567,Ombrotrophic Bog,HR,COMP_001,PROJECT,2024,-5,320,Intact
+COMP_001,-105.234,54.567,Ombrotrophic Bog,Paired Composite,HR_001,PROJECT,2024,-5,320,Intact
+HR_002,-105.245,54.578,Minerotrophic Fen,HR,COMP_002,PROJECT,2024,3,250,Intact
+COMP_002,-105.245,54.578,Minerotrophic Fen,Paired Composite,HR_002,PROJECT,2024,3,250,Intact
+COMP_003,-105.256,54.589,Marsh,Unpaired Composite,NA,PROJECT,2024,8,45,Seasonally flooded
+COMP_004,-105.267,54.590,Drained Peatland,Unpaired Composite,NA,BASELINE,2024,65,280,Drained
+BASE_HR_001,-105.278,54.601,Drained Peatland,HR,BASE_COMP_001,BASELINE,2024,72,195,Heavily drained
+BASE_COMP_001,-105.278,54.601,Drained Peatland,Paired Composite,BASE_HR_001,BASELINE,2024,72,195,Heavily drained
+COMP_005,-105.289,54.612,Restored Peatland,Unpaired Composite,NA,PROJECT_Y5,2024,8,305,Rewetted 5 years ago

@@ -1,5 +1,8 @@
-stratum_name,gee_file,stratum_code,description,restoration_type,baseline_vs_project,age_years
-Emerging Marsh,emerging_marsh.tif,1,Recently restored marsh (0-5 years),active_restoration,project,3
-Restored Marsh,restored_marsh.tif,2,Established restored marsh (>5 years),active_restoration,project,8
-Degraded Marsh,degraded_marsh.tif,3,Degraded baseline condition,none,baseline,NA
-Reference Marsh,reference_natural.tif,4,Natural reference site,natural,reference,NA
+stratum_name,gee_file,stratum_code,description,restoration_type,baseline_vs_project,age_years,water_table_target_cm
+Ombrotrophic Bog,ombrotrophic_bog.tif,1,Intact raised bog - Sphagnum dominated,natural,reference,NA,-5
+Minerotrophic Fen,minerotrophic_fen.tif,2,Groundwater-fed fen - sedge/brown moss,natural,reference,NA,0
+Treed Peatland,treed_peatland.tif,3,Black spruce/tamarack on peat,natural,reference,NA,5
+Drained Peatland,drained_peatland.tif,4,Baseline drained condition (ditched),none,baseline,NA,60
+Restored Peatland,restored_peatland.tif,5,Rewetted peatland (5 years post),rewetting,project,5,10
+Marsh,marsh.tif,6,Mineral wetland - emergent vegetation,natural,project,NA,5
+Swamp,swamp.tif,7,Wooded wetland on mineral soil,natural,project,NA,10

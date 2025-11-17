@@ -1,43 +1,38 @@
-core_id,depth_top_cm,depth_bottom_cm,soc_g_kg,bulk_density_g_cm3,sample_notes
-HR_001,0,5,45.2,0.85,Surface layer
-HR_001,5,10,42.1,0.87,
-HR_001,10,15,38.5,0.89,
-HR_001,15,20,35.2,0.91,
-HR_001,20,25,32.8,0.93,
-HR_001,25,30,30.5,0.95,High resolution - fine intervals
-COMP_001,0,15,41.8,0.87,Composite sample 0-15cm
-COMP_001,15,30,33.2,0.92,Composite sample 15-30cm
-COMP_001,30,50,28.5,0.98,Composite sample 30-50cm
-COMP_001,50,100,22.1,1.05,Composite sample 50-100cm
-HR_002,0,5,52.3,0.75,Surface layer - Lower marsh
-HR_002,5,10,48.9,0.78,
-HR_002,10,15,45.2,0.81,
-HR_002,15,20,42.1,0.84,
-HR_002,20,25,39.5,0.86,
-HR_002,25,30,37.2,0.89,
-COMP_002,0,15,48.5,0.78,Paired with HR_002
-COMP_002,15,30,40.2,0.85,
-COMP_002,30,50,34.8,0.92,
-COMP_002,50,100,26.3,1.02,
-COMP_003,0,15,35.6,0.82,Unpaired composite
-COMP_003,15,30,31.2,0.88,
-COMP_003,30,50,27.5,0.95,
-COMP_003,50,100,21.8,1.08,
-COMP_004,0,15,28.4,0.65,Underwater veg - unpaired
-COMP_004,15,30,24.7,0.68,
-COMP_004,30,50,20.3,0.72,
-COMP_004,50,100,15.2,0.78,
-BASE_HR_001,0,5,38.5,0.88,Baseline HR core
-BASE_HR_001,5,10,36.2,0.90,
-BASE_HR_001,10,15,34.1,0.92,
-BASE_HR_001,15,20,32.5,0.94,
-BASE_HR_001,20,25,30.8,0.96,
-BASE_HR_001,25,30,29.2,0.98,
-BASE_COMP_001,0,15,36.3,0.90,Baseline paired composite
-BASE_COMP_001,15,30,31.1,0.95,
-BASE_COMP_001,30,50,26.8,1.01,
-BASE_COMP_001,50,100,21.5,1.10,
-BASE_COMP_002,0,15,32.1,0.84,Baseline unpaired
-BASE_COMP_002,15,30,28.5,0.90,
-BASE_COMP_002,30,50,24.3,0.97,
-BASE_COMP_002,50,100,19.8,1.05,
+core_id,depth_top_cm,depth_bottom_cm,soc_g_kg,bulk_density_g_cm3,pH,von_post_scale,peat_type,sample_notes
+HR_001,0,5,385,0.09,3.8,H3,Fibric Sphagnum,Surface acrotelm layer
+HR_001,5,10,398,0.10,3.9,H4,Fibric Sphagnum,
+HR_001,10,15,412,0.11,4.0,H4,Fibric Sphagnum,
+HR_001,15,20,425,0.12,4.1,H5,Hemic Sphagnum,
+HR_001,20,25,438,0.13,4.2,H5,Hemic Sphagnum,
+HR_001,25,30,445,0.14,4.3,H5,Hemic Sphagnum,Transition to catotelm
+COMP_001,0,30,405,0.11,4.0,H4,Fibric-Hemic mix,Composite acrotelm 0-30cm
+COMP_001,30,100,428,0.15,4.2,H6,Hemic peat,Composite shallow catotelm 30-100cm
+COMP_001,100,200,452,0.18,4.4,H7,Hemic-Sapric,Composite deep catotelm 100-200cm
+COMP_001,200,300,468,0.21,4.5,H8,Sapric peat,Composite very deep peat
+HR_002,0,5,348,0.14,5.8,H4,Fibric sedge,Surface layer - Minerotrophic fen
+HR_002,5,10,362,0.15,6.0,H5,Hemic sedge,
+HR_002,10,15,375,0.16,6.1,H5,Hemic sedge,
+HR_002,15,20,388,0.17,6.2,H6,Hemic sedge,
+HR_002,20,25,401,0.18,6.3,H6,Hemic sedge,
+HR_002,25,30,415,0.19,6.4,H6,Hemic sedge,Brown moss present
+COMP_002,0,30,368,0.16,6.0,H5,Sedge peat,Paired with HR_002
+COMP_002,30,100,405,0.20,6.3,H6,Hemic sedge,
+COMP_002,100,200,432,0.23,6.5,H7,Hemic-Sapric,
+COMP_002,200,250,448,0.26,6.6,H8,Sapric sedge peat,Depth to mineral contact
+COMP_003,0,30,225,0.42,6.8,NA,Mineral wetland,Marsh - unpaired composite
+COMP_003,30,100,198,0.48,7.0,NA,Mineral soil,Shallow organic layer only
+COMP_004,0,30,312,0.18,4.5,H7,Sapric woody peat,Drained peatland - baseline
+COMP_004,30,100,285,0.22,4.6,H8,Sapric woody peat,Compacted/oxidized
+COMP_004,100,200,268,0.25,4.7,H9,Highly decomposed,Significant subsidence
+BASE_HR_001,0,5,295,0.20,4.2,H7,Sapric peat,Baseline drained bog - HR
+BASE_HR_001,5,10,288,0.21,4.3,H7,Sapric peat,
+BASE_HR_001,10,15,275,0.22,4.4,H8,Sapric peat,
+BASE_HR_001,15,20,262,0.23,4.5,H8,Sapric peat,
+BASE_HR_001,20,25,248,0.24,4.6,H8,Sapric peat,
+BASE_HR_001,25,30,235,0.25,4.7,H9,Highly decomposed,Heavily degraded
+BASE_COMP_001,0,30,278,0.22,4.4,H8,Sapric peat,Baseline paired composite
+BASE_COMP_001,30,100,255,0.24,4.6,H8,Sapric peat,
+BASE_COMP_001,100,200,242,0.26,4.8,H9,Highly decomposed,
+COMP_005,0,30,368,0.11,3.9,H4,Fibric Sphagnum,Restored peatland Y5 - rewetted
+COMP_005,30,100,415,0.15,4.1,H5,Hemic Sphagnum,Recovery trajectory
+COMP_005,100,200,445,0.18,4.3,H6,Hemic peat,Water table restored
