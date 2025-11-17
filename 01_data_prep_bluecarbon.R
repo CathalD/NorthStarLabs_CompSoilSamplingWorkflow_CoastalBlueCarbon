@@ -1,29 +1,34 @@
 # ============================================================================
-# MODULE 01: BLUE CARBON DATA PREPARATION
+# MODULE 01: PEATLAND CARBON DATA PREPARATION
 # ============================================================================
-# PURPOSE: Load, clean, validate, and structure core data for MMRV
+# PURPOSE: Load, clean, validate, and structure peat core data for MRV
+#
+# FRAMEWORK: VM0036 (Rewetting Drained Temperate Peatlands) + CaMP + ECCC
 #
 # INPUTS:
-#   - data_raw/core_locations.csv (GPS + stratum assignments)
-#   - data_raw/core_samples.csv (depth profiles + SOC)
-#   - blue_carbon_config.R (configuration)
+#   - data_raw/core_locations.csv (GPS + stratum + water table + peat depth)
+#   - data_raw/core_samples.csv (depth profiles + SOC + pH + von Post + peat type)
+#   - blue_carbon_config.R (peatland configuration)
 #
 # OUTPUTS:
 #   Core Data (data_processed/):
-#     - cores_clean_bluecarbon.rds/.csv (cleaned sample data)
+#     - cores_clean_peatland.rds/.csv (cleaned peat core data)
 #     - core_totals.rds/.csv (integrated carbon stocks by core)
 #     - cores_summary_by_stratum.csv (stratum statistics)
 #     - carbon_by_stratum_summary.csv (carbon summaries)
 #
 #   Diagnostics (diagnostics/data_prep/):
-#     - vm0033_compliance_report.csv (VM0033 requirements check)
-#     - core_depth_completeness.csv (depth coverage by core)
+#     - vm0036_compliance_report.csv (VM0036 peatland MRV requirements)
+#     - core_depth_completeness.csv (depth coverage by core, 0-300 cm)
 #     - depth_completeness_summary.csv (overall depth coverage)
 #     - core_type_summary.csv (HR vs Composite comparison)
 #     - core_type_statistical_tests.csv (statistical test results)
+#     - water_table_summary.csv (water table depth by stratum)
+#     - peat_depth_summary.csv (peat depth to mineral soil)
 #
 #   QA/QC (diagnostics/qaqc/):
 #     - bd_transparency_report.csv (bulk density measured vs estimated)
+#     - peatland_qc_report.csv (peat-specific QC: pH, von Post, water table)
 #     - qa_report.rds (comprehensive QA summary)
 # ============================================================================
 
@@ -39,8 +44,10 @@ if (file.exists("blue_carbon_config.R")) {
 }
 
 # Verify required config variables are loaded
-required_vars <- c("VM0033_MIN_CORES", "CONFIDENCE_LEVEL", "VALID_STRATA",
-                   "INPUT_CRS", "PROCESSING_CRS", "BD_DEFAULTS")
+required_vars <- c("VM0036_MIN_CORES", "CONFIDENCE_LEVEL", "VALID_STRATA",
+                   "INPUT_CRS", "PROCESSING_CRS", "BD_DEFAULTS",
+                   "QC_PH_MIN", "QC_PH_MAX", "QC_WT_MIN", "QC_WT_MAX",
+                   "QC_VON_POST_MIN", "QC_VON_POST_MAX", "MAX_CORE_DEPTH")
 missing_vars <- required_vars[!sapply(required_vars, exists)]
 if (length(missing_vars) > 0) {
   stop(sprintf("Configuration error: Missing required variables: %s\nPlease check blue_carbon_config.R",
@@ -71,7 +78,7 @@ log_message <- function(msg, level = "INFO") {
   cat(log_entry, "\n", file = log_file, append = TRUE)
 }
 
-log_message("=== MODULE 01: BLUE CARBON DATA PREPARATION ===")
+log_message("=== MODULE 01: PEATLAND CARBON DATA PREPARATION ===")
 
 # Load packages
 suppressPackageStartupMessages({
@@ -217,7 +224,7 @@ validate_coordinates <- function(locations) {
 #' = SOC × BD × depth × 10,000 cm² / (1000 kg/g) / 1000
 #' = SOC × BD × depth / 1000 kg/m²
 #'
-#' Note: To convert to Mg/ha for VM0033 reporting, multiply by 10
+#' Note: To convert to Mg/ha for VM0036 reporting, multiply by 10
 #' (since 1 kg/m² = 10 Mg/ha)
 calculate_soc_stock <- function(soc_g_kg, bd_g_cm3, depth_top_cm, depth_bottom_cm) {
   depth_increment <- depth_bottom_cm - depth_top_cm
@@ -294,13 +301,13 @@ assign_bd_defaults <- function(df, bd_col = "bulk_density_g_cm3",
   return(df)
 }
 
-#' Calculate required sample size for VM0033 compliance
+#' Calculate required sample size for VM0036 compliance
 #' Based on: n = (z * CV / target_precision)^2
-calculate_required_n <- function(cv, target_precision = VM0033_TARGET_PRECISION,
+calculate_required_n <- function(cv, target_precision = VM0036_TARGET_PRECISION,
                                 confidence = CONFIDENCE_LEVEL) {
   z <- qnorm(1 - (1 - confidence) / 2)  # 1.96 for 95% CI
   n <- ceiling((z * cv / target_precision)^2)
-  return(max(n, VM0033_MIN_CORES))  # Ensure at least minimum
+  return(max(n, VM0036_MIN_CORES))  # Ensure at least minimum
 }
 
 #' Calculate achieved precision from sample size and CV
@@ -354,7 +361,7 @@ if (!validate_strata(locations$stratum)) {
   stop("Invalid stratum names detected. Please fix in source data.")
 }
 
-# Add VM0033 metadata if not present
+# Add VM0036 metadata if not present
 if (!"scenario_type" %in% names(locations)) {
   locations$scenario_type <- PROJECT_SCENARIO
   log_message("Added scenario_type from config")
@@ -363,6 +370,22 @@ if (!"scenario_type" %in% names(locations)) {
 if (!"monitoring_year" %in% names(locations)) {
   locations$monitoring_year <- MONITORING_YEAR
   log_message("Added monitoring_year from config")
+}
+
+# Check for optional peatland-specific columns
+peatland_cols <- c("water_table_cm", "peat_depth_cm", "drainage_status")
+present_peatland_cols <- intersect(peatland_cols, names(locations))
+missing_peatland_cols <- setdiff(peatland_cols, names(locations))
+
+if (length(present_peatland_cols) > 0) {
+  log_message(sprintf("Peatland-specific columns found: %s",
+                     paste(present_peatland_cols, collapse = ", ")))
+}
+
+if (length(missing_peatland_cols) > 0) {
+  log_message(sprintf("Optional peatland columns not provided: %s",
+                     paste(missing_peatland_cols, collapse = ", ")), "WARNING")
+  log_message("  These are recommended for VM0036 compliance and restoration verification", "WARNING")
 }
 
 # Validate scenario_type (optional validation if VALID_SCENARIOS exists)
@@ -431,8 +454,24 @@ required_cols_samples <- c("core_id", "depth_top_cm", "depth_bottom_cm", "soc_g_
 missing_cols <- setdiff(required_cols_samples, names(samples))
 
 if (length(missing_cols) > 0) {
-  stop(sprintf("Missing required columns in samples: %s", 
+  stop(sprintf("Missing required columns in samples: %s",
                paste(missing_cols, collapse = ", ")))
+}
+
+# Check for optional peatland-specific columns in samples
+peatland_sample_cols <- c("ph", "von_post_scale", "peat_type")
+present_peat_cols <- intersect(peatland_sample_cols, names(samples))
+missing_peat_cols <- setdiff(peatland_sample_cols, names(samples))
+
+if (length(present_peat_cols) > 0) {
+  log_message(sprintf("Peatland sample columns found: %s",
+                     paste(present_peat_cols, collapse = ", ")))
+}
+
+if (length(missing_peat_cols) > 0) {
+  log_message(sprintf("Optional peat characterization columns not provided: %s",
+                     paste(missing_peat_cols, collapse = ", ")), "WARNING")
+  log_message("  pH, von Post scale, and peat type are recommended for peatland assessment", "WARNING")
 }
 
 # Calculate depth midpoint
@@ -453,12 +492,12 @@ log_message("Running quality checks...")
 # Initialize QA flags
 samples <- samples %>%
   mutate(
-    qa_depth_valid = depth_top_cm >= 0 & 
+    qa_depth_valid = depth_top_cm >= 0 &
                      depth_top_cm < depth_bottom_cm &
                      depth_bottom_cm <= MAX_CORE_DEPTH,
-    
-    qa_soc_valid = !is.na(soc_g_kg) & 
-                   soc_g_kg >= QC_SOC_MIN & 
+
+    qa_soc_valid = !is.na(soc_g_kg) &
+                   soc_g_kg >= QC_SOC_MIN &
                    soc_g_kg <= QC_SOC_MAX
   )
 
@@ -466,8 +505,8 @@ samples <- samples %>%
 if ("bulk_density_g_cm3" %in% names(samples)) {
   samples <- samples %>%
     mutate(
-      qa_bd_valid = is.na(bulk_density_g_cm3) | 
-                    (bulk_density_g_cm3 >= QC_BD_MIN & 
+      qa_bd_valid = is.na(bulk_density_g_cm3) |
+                    (bulk_density_g_cm3 >= QC_BD_MIN &
                      bulk_density_g_cm3 <= QC_BD_MAX),
       bd_measured = !is.na(bulk_density_g_cm3)
     )
@@ -476,6 +515,47 @@ if ("bulk_density_g_cm3" %in% names(samples)) {
   samples$bulk_density_g_cm3 <- NA
   samples$qa_bd_valid <- TRUE
   samples$bd_measured <- FALSE
+}
+
+# PEATLAND-SPECIFIC QC CHECKS
+
+# Check pH if present
+if ("ph" %in% names(samples)) {
+  samples <- samples %>%
+    mutate(
+      qa_ph_valid = is.na(ph) |
+                    (ph >= QC_PH_MIN & ph <= QC_PH_MAX)
+    )
+
+  n_ph_invalid <- sum(!samples$qa_ph_valid, na.rm = TRUE)
+  if (n_ph_invalid > 0) {
+    log_message(sprintf("Invalid pH values: %d samples (outside %g-%g)",
+                       n_ph_invalid, QC_PH_MIN, QC_PH_MAX), "WARNING")
+  }
+} else {
+  samples$qa_ph_valid <- TRUE
+  log_message("pH not provided - skipping pH QC", "INFO")
+}
+
+# Check von Post scale if present
+if ("von_post_scale" %in% names(samples)) {
+  # Extract numeric part from von Post (e.g., "H5" -> 5)
+  samples <- samples %>%
+    mutate(
+      von_post_numeric = as.numeric(gsub("[^0-9]", "", von_post_scale)),
+      qa_von_post_valid = is.na(von_post_numeric) |
+                          (von_post_numeric >= QC_VON_POST_MIN &
+                           von_post_numeric <= QC_VON_POST_MAX)
+    )
+
+  n_von_post_invalid <- sum(!samples$qa_von_post_valid, na.rm = TRUE)
+  if (n_von_post_invalid > 0) {
+    log_message(sprintf("Invalid von Post values: %d samples (outside H%d-H%d)",
+                       n_von_post_invalid, QC_VON_POST_MIN, QC_VON_POST_MAX), "WARNING")
+  }
+} else {
+  samples$qa_von_post_valid <- TRUE
+  log_message("von Post scale not provided - skipping humification QC", "INFO")
 }
 
 # Report QA results
@@ -487,15 +567,18 @@ if (n_depth_invalid > 0) {
   log_message(sprintf("Invalid depths: %d samples", n_depth_invalid), "WARNING")
 }
 if (n_soc_invalid > 0) {
-  log_message(sprintf("Invalid SOC values: %d samples", n_soc_invalid), "WARNING")
+  log_message(sprintf("Invalid SOC values: %d samples (outside %g-%g g/kg)",
+                     n_soc_invalid, QC_SOC_MIN, QC_SOC_MAX), "WARNING")
 }
 if (n_bd_invalid > 0) {
-  log_message(sprintf("Invalid BD values: %d samples", n_bd_invalid), "WARNING")
+  log_message(sprintf("Invalid BD values: %d samples (outside %g-%g g/cm³)",
+                     n_bd_invalid, QC_BD_MIN, QC_BD_MAX), "WARNING")
 }
 
 # Filter to valid samples only
 samples_clean <- samples %>%
-  filter(qa_depth_valid & qa_soc_valid & qa_bd_valid)
+  filter(qa_depth_valid & qa_soc_valid & qa_bd_valid &
+         qa_ph_valid & qa_von_post_valid)
 
 log_message(sprintf("After QA: %d samples retained from %d cores",
                     nrow(samples_clean),
@@ -582,16 +665,16 @@ write_csv(stratum_stats, "data_processed/cores_summary_by_stratum.csv")
 log_message("Saved stratum summary")
 
 # ============================================================================
-# VM0033 SAMPLE SIZE VALIDATION & STATISTICAL POWER (CHANGE #2)
+# VM0036 SAMPLE SIZE VALIDATION & STATISTICAL POWER (CHANGE #2)
 # ============================================================================
 
-log_message("Validating VM0033 sample size requirements...")
+log_message("Validating VM0036 sample size requirements...")
 
 # Calculate power analysis for each stratum
-vm0033_compliance <- stratum_stats %>%
+vm0036_compliance <- stratum_stats %>%
   mutate(
     # Check minimum sample size
-    meets_min_n = n_cores >= VM0033_MIN_CORES,
+    meets_min_n = n_cores >= VM0036_MIN_CORES,
 
     # Calculate required N for target precision
     required_n_20pct = mapply(calculate_required_n, cv_soc, 20, CONFIDENCE_LEVEL),
@@ -606,13 +689,13 @@ vm0033_compliance <- stratum_stats %>%
     additional_for_15pct = pmax(0, required_n_15pct - n_cores),
     additional_for_10pct = pmax(0, required_n_10pct - n_cores),
 
-    # VM0033 compliance flags
+    # VM0036 compliance flags
     meets_20pct_precision = achieved_precision_pct <= 20,
     meets_15pct_precision = achieved_precision_pct <= 15,
     meets_10pct_precision = achieved_precision_pct <= 10,
 
     # Overall compliance (min 3 cores AND ≤20% precision)
-    vm0033_compliant = meets_min_n & meets_20pct_precision,
+    vm0036_compliant = meets_min_n & meets_20pct_precision,
 
     # Status assessment
     status = case_when(
@@ -626,54 +709,54 @@ vm0033_compliance <- stratum_stats %>%
   )
 
 cat("\n========================================\n")
-cat("VM0033 SAMPLE SIZE COMPLIANCE\n")
+cat("VM0036 SAMPLE SIZE COMPLIANCE\n")
 cat("========================================\n\n")
 
 # Print compliance by stratum
-for (i in 1:nrow(vm0033_compliance)) {
-  cat(sprintf("Stratum: %s\n", vm0033_compliance$stratum[i]))
-  cat(sprintf("  Current samples: %d cores\n", vm0033_compliance$n_cores[i]))
-  cat(sprintf("  CV: %.1f%%\n", vm0033_compliance$cv_soc[i]))
+for (i in 1:nrow(vm0036_compliance)) {
+  cat(sprintf("Stratum: %s\n", vm0036_compliance$stratum[i]))
+  cat(sprintf("  Current samples: %d cores\n", vm0036_compliance$n_cores[i]))
+  cat(sprintf("  CV: %.1f%%\n", vm0036_compliance$cv_soc[i]))
   cat(sprintf("  Achieved precision: %.1f%% (at 95%% CI)\n",
-              vm0033_compliance$achieved_precision_pct[i]))
-  cat(sprintf("  Status: %s\n", vm0033_compliance$status[i]))
-  cat(sprintf("  VM0033 Compliant: %s\n",
-              ifelse(vm0033_compliance$vm0033_compliant[i], "✓ YES", "✗ NO")))
+              vm0036_compliance$achieved_precision_pct[i]))
+  cat(sprintf("  Status: %s\n", vm0036_compliance$status[i]))
+  cat(sprintf("  VM0036 Compliant: %s\n",
+              ifelse(vm0036_compliance$vm0036_compliant[i], "✓ YES", "✗ NO")))
 
   # Recommendations
-  if (!vm0033_compliance$vm0033_compliant[i]) {
+  if (!vm0036_compliance$vm0036_compliant[i]) {
     cat("\n  Recommendations:\n")
-    if (!vm0033_compliance$meets_min_n[i]) {
+    if (!vm0036_compliance$meets_min_n[i]) {
       cat(sprintf("    • Add %d cores to meet minimum requirement\n",
-                  VM0033_MIN_CORES - vm0033_compliance$n_cores[i]))
+                  VM0036_MIN_CORES - vm0036_compliance$n_cores[i]))
     }
-    if (vm0033_compliance$additional_for_20pct[i] > 0) {
+    if (vm0036_compliance$additional_for_20pct[i] > 0) {
       cat(sprintf("    • Add %d cores to achieve 20%% precision\n",
-                  vm0033_compliance$additional_for_20pct[i]))
+                  vm0036_compliance$additional_for_20pct[i]))
     }
-    if (vm0033_compliance$additional_for_15pct[i] > 0) {
+    if (vm0036_compliance$additional_for_15pct[i] > 0) {
       cat(sprintf("    • Add %d cores to achieve 15%% precision\n",
-                  vm0033_compliance$additional_for_15pct[i]))
+                  vm0036_compliance$additional_for_15pct[i]))
     }
   }
   cat("\n")
 }
 
 # Overall project status
-n_compliant <- sum(vm0033_compliance$vm0033_compliant)
-n_total <- nrow(vm0033_compliance)
+n_compliant <- sum(vm0036_compliance$vm0036_compliant)
+n_total <- nrow(vm0036_compliance)
 
-cat(sprintf("Overall: %d/%d strata meet VM0033 requirements\n\n",
+cat(sprintf("Overall: %d/%d strata meet VM0036 requirements\n\n",
             n_compliant, n_total))
 
 if (n_compliant < n_total) {
-  log_message(sprintf("WARNING: %d strata do not meet VM0033 requirements",
+  log_message(sprintf("WARNING: %d strata do not meet VM0036 requirements",
                       n_total - n_compliant), "WARNING")
 }
 
-# Save VM0033 compliance report
-write_csv(vm0033_compliance, "diagnostics/data_prep/vm0033_compliance_report.csv")
-log_message("Saved VM0033 compliance report")
+# Save VM0036 compliance report
+write_csv(vm0036_compliance, "diagnostics/data_prep/vm0036_compliance_report.csv")
+log_message("Saved VM0036 compliance report")
 
 # ============================================================================
 # BULK DENSITY HANDLING
@@ -776,7 +859,7 @@ for (i in 1:nrow(bd_transparency)) {
 
 cat("\n📝 Note: Estimated BD values are based on literature defaults.\n")
 cat("   Carbon stock uncertainty will be higher for samples with estimated BD.\n")
-cat("   VM0033 recommends measuring BD for all cores when possible.\n\n")
+cat("   VM0036 recommends measuring BD for all cores when possible.\n\n")
 
 # Save BD transparency report
 write_csv(bd_transparency, "diagnostics/qaqc/bd_transparency_report.csv")
@@ -1142,10 +1225,10 @@ qa_report <- list(
   cores_by_stratum = stratum_stats,
   carbon_by_stratum = carbon_by_stratum,
 
-  # VM0033 compliance (NEW)
-  vm0033_compliance = vm0033_compliance,
-  n_compliant_strata = sum(vm0033_compliance$vm0033_compliant),
-  n_total_strata = nrow(vm0033_compliance),
+  # VM0036 compliance (NEW)
+  vm0036_compliance = vm0036_compliance,
+  n_compliant_strata = sum(vm0036_compliance$vm0036_compliant),
+  n_total_strata = nrow(vm0036_compliance),
 
   # Bulk density
   bd_measured = n_bd_measured,
@@ -1203,12 +1286,12 @@ cat(sprintf("  Measured: %d samples (%.1f%%)\n", n_bd_measured,
 cat(sprintf("  Estimated: %d samples (%.1f%%)\n", n_bd_missing,
             100 * n_bd_missing / nrow(cores_complete)))
 
-cat("\nVM0033 Compliance:\n")
+cat("\nVM0036 Compliance:\n")
 cat(sprintf("  Compliant strata: %d/%d\n",
-            sum(vm0033_compliance$vm0033_compliant),
-            nrow(vm0033_compliance)))
-if (sum(vm0033_compliance$vm0033_compliant) < nrow(vm0033_compliance)) {
-  cat("  ⚠ Review vm0033_compliance_report.csv for details\n")
+            sum(vm0036_compliance$vm0036_compliant),
+            nrow(vm0036_compliance)))
+if (sum(vm0036_compliance$vm0036_compliant) < nrow(vm0036_compliance)) {
+  cat("  ⚠ Review vm0036_compliance_report.csv for details\n")
 }
 
 cat("\nOutputs saved to data_processed/:\n")
@@ -1219,8 +1302,8 @@ cat("    - core_totals.csv\n")
 cat("  Summaries:\n")
 cat("    - cores_summary_by_stratum.csv\n")
 cat("    - carbon_by_stratum_summary.csv\n")
-cat("  VM0033 & Uncertainty:\n")
-cat("    - vm0033_compliance_report.csv (NEW)\n")
+cat("  VM0036 & Uncertainty:\n")
+cat("    - vm0036_compliance_report.csv (NEW)\n")
 cat("  Bulk Density:\n")
 cat("    - bd_transparency_report.csv (NEW)\n")
 cat("  Depth Profiles:\n")
@@ -1233,7 +1316,7 @@ cat("  QA Report:\n")
 cat("    - qa_report.rds\n")
 
 cat("\nNext steps:\n")
-cat("  1. Review VM0033 compliance report\n")
+cat("  1. Review VM0036 compliance report\n")
 cat("  2. Check BD transparency and depth completeness\n")
 cat("  3. If needed, collect additional samples for non-compliant strata\n")
 cat("  4. Run: source('02_exploratory_analysis_bluecarbon.R')\n\n")

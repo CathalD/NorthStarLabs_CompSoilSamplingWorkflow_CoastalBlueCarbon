@@ -1,17 +1,25 @@
 # ============================================================================
-# MODULE 03: BLUE CARBON DEPTH HARMONIZATION USING SPLINES
+# MODULE 03: PEATLAND DEPTH HARMONIZATION USING SPLINES
 # ============================================================================
-# PURPOSE: Harmonize SOC and bulk density depth profiles to standard depths
-#          using equal-area splines with stratum-specific parameters and
-#          uncertainty quantification. Calculate continuous carbon stocks (kg/m²).
+# PURPOSE: Harmonize SOC and bulk density depth profiles to standard peatland
+#          depths (0-300 cm) using equal-area splines with stratum-specific
+#          parameters and uncertainty quantification. Calculate carbon stocks.
+#
+# FRAMEWORK: CaMP (Canadian Model for Peatlands) + VM0036 depth intervals
+#
 # INPUTS:
-#   - data_processed/cores_clean_bluecarbon.rds
+#   - data_processed/cores_clean_peatland.rds (or cores_clean_bluecarbon.rds)
 # OUTPUTS:
-#   - data_processed/cores_harmonized_bluecarbon.rds (SOC, BD, carbon stocks)
-#   - data_processed/cores_harmonized_bluecarbon.csv
-#   - outputs/plots/by_stratum/harmonization_fits_*.png
+#   - data_processed/cores_harmonized_peatland.rds (SOC, BD, carbon stocks)
+#   - data_processed/cores_harmonized_peatland.csv
+#   - outputs/plots/by_stratum/harmonization_fits_*.png (depth 0-300 cm)
 #   - diagnostics/harmonization_diagnostics.rds
 #   - diagnostics/harmonization_diagnostics.csv
+#
+# KEY FEATURES:
+#   - Extended depth range (0-300 cm vs. 0-100 cm for coastal)
+#   - Peatland depth layers: Acrotelm (0-30), Catotelm (30-300 cm)
+#   - von Post scale-aware BD estimation for peat decomposition
 # ============================================================================
 
 # ============================================================================
@@ -35,7 +43,7 @@ log_message <- function(msg, level = "INFO") {
   cat(log_entry, "\n", file = log_file, append = TRUE)
 }
 
-log_message("=== MODULE 03: DEPTH HARMONIZATION ===")
+log_message("=== MODULE 03: PEATLAND DEPTH HARMONIZATION ===")
 
 # Set random seed for reproducibility
 set.seed(BOOTSTRAP_SEED)
