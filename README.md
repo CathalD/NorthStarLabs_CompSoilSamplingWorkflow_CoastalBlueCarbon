@@ -13,6 +13,7 @@
 - [Overview](#overview)
 - [Key Features](#key-features)
 - [Prerequisites](#prerequisites)
+- [**NEW: Transfer Learning Enhancement**](#transfer-learning-enhancement) ⭐
 - [Workflow Structure](#workflow-structure)
   - [Part 1: Sampling Design & Bayesian Priors (GEE)](#part-1-sampling-design--bayesian-priors-gee)
   - [Part 2: Sample Analysis](#part-2-sample-analysis)
@@ -53,6 +54,43 @@ This workflow provides a **complete analytical pipeline** for coastal blue carbo
 ✅ **Actionable Recommendations** - Data-driven guidance on additional sampling needs
 ✅ **Temporal Analysis** - Baseline vs. project scenario comparisons with additionality calculation
 ✅ **Full MMRV Reporting** - HTML verification packages, Excel tables, spatial exports
+
+---
+
+## ⭐ Transfer Learning Enhancement
+
+**NEW (2025-11-18):** This workflow now includes guidance for integrating **transfer learning** methods to improve prediction accuracy by 10-30%, especially in undersampled areas.
+
+**Key Benefits:**
+- 🎯 **10-30% accuracy improvement** over standard Random Forest
+- 💰 **20-30% reduction** in required field samples
+- 📊 **Easier VM0033 compliance** with tighter confidence intervals
+- 🌍 **Better generalization** to new regions
+
+**Based on:** "Regional-scale soil carbon predictions can be enhanced by transferring global-scale soil–environment relationships" (Geoderma 2025, DOI: 10.1016/j.geoderma.2025.117466)
+
+### Quick Start
+
+1. **Read the Quick Start Guide:**
+   - [`TRANSFER_LEARNING_QUICK_START.md`](TRANSFER_LEARNING_QUICK_START.md) - 5-minute overview
+
+2. **Review Full Analysis:**
+   - [`ARTICLE_ANALYSIS_Transfer_Learning_Integration.md`](ARTICLE_ANALYSIS_Transfer_Learning_Integration.md) - Complete technical analysis
+
+3. **Implementation Template:**
+   - [`05b_transfer_learning_hybrid_bluecarbon.R`](05b_transfer_learning_hybrid_bluecarbon.R) - Ready-to-use code
+
+### Three Implementation Options
+
+| Option | Effort | Improvement | Best For |
+|--------|--------|-------------|----------|
+| **A: Full Deep Learning** | High (2-4 mo) | 15-30% | Research projects |
+| **B: Hybrid RF** ⭐ | Medium (1-2 mo) | 10-15% | Practical implementation |
+| **C: Enhanced Sampling** | Low (1-2 wk) | 5-10% | Immediate cost savings |
+
+**Recommended:** Start with Option C for immediate benefits, develop Option B for production use.
+
+See [`TRANSFER_LEARNING_QUICK_START.md`](TRANSFER_LEARNING_QUICK_START.md) for detailed guidance.
 
 ---
 
