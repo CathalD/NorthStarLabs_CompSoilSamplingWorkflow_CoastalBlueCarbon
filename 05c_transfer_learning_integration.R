@@ -99,9 +99,62 @@ if (!file.exists(CONFIG$global_features)) {
   global_features <- read_csv(CONFIG$global_features, show_col_types = FALSE)
   cat(sprintf("✓ Loaded global features for %d cores\n", nrow(global_features)))
 
+  # Detect ID column in global features
+  # GEE exports may have different column names
+  possible_id_cols <- c("core_id", "sample_id", "system:index", ".geo")
+
+  id_col_global <- NULL
+  for (col in possible_id_cols) {
+    if (col %in% names(global_features)) {
+      id_col_global <- col
+      break
+    }
+  }
+
+  if (is.null(id_col_global)) {
+    # Use first column as ID
+    id_col_global <- names(global_features)[1]
+    cat(sprintf("WARNING: No standard ID column found in global features.\n"))
+    cat(sprintf("Using first column as ID: '%s'\n", id_col_global))
+  } else {
+    cat(sprintf("✓ Detected ID column in global features: '%s'\n", id_col_global))
+  }
+
+  # Detect ID column in local cores
+  id_col_local <- NULL
+  if ("core_id" %in% names(local_cores)) {
+    id_col_local <- "core_id"
+  } else if ("sample_id" %in% names(local_cores)) {
+    id_col_local <- "sample_id"
+  } else {
+    id_col_local <- names(local_cores)[1]
+  }
+
+  cat(sprintf("✓ Using ID column in local cores: '%s'\n", id_col_local))
+
+  # Standardize ID column names for merge
+  if (id_col_global != id_col_local) {
+    cat(sprintf("Renaming '%s' to '%s' in global features for merge\n",
+                id_col_global, id_col_local))
+    global_features <- global_features %>%
+      rename(!!id_col_local := !!id_col_global)
+  }
+
+  # Remove .geo column if it exists (GEE artifact)
+  if (".geo" %in% names(global_features)) {
+    global_features <- global_features %>%
+      select(-.geo)
+  }
+
+  # Show first few IDs for verification
+  cat("\nFirst 3 IDs in local cores:",
+      paste(head(local_cores[[id_col_local]], 3), collapse = ", "), "\n")
+  cat("First 3 IDs in global features:",
+      paste(head(global_features[[id_col_local]], 3), collapse = ", "), "\n\n")
+
   # Merge
   cores_merged <- local_cores %>%
-    left_join(global_features, by = "core_id")
+    left_join(global_features, by = id_col_local)
 
   # Check merge success
   n_missing_global <- sum(is.na(cores_merged$murray_tidal_flag))
