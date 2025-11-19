@@ -140,6 +140,18 @@ if (!file.exists(CONFIG$global_features)) {
       rename(!!id_col_local := !!id_col_global)
   }
 
+  # Convert ID column types to match
+  # This handles cases where GEE exports numeric IDs but local data has character IDs
+  if (is.character(local_cores[[id_col_local]]) && is.numeric(global_features[[id_col_local]])) {
+    cat("Converting numeric global IDs to character to match local IDs\n")
+    global_features <- global_features %>%
+      mutate(!!id_col_local := as.character(.data[[id_col_local]]))
+  } else if (is.numeric(local_cores[[id_col_local]]) && is.character(global_features[[id_col_local]])) {
+    cat("Converting character global IDs to numeric to match local IDs\n")
+    global_features <- global_features %>%
+      mutate(!!id_col_local := as.numeric(.data[[id_col_local]]))
+  }
+
   # Remove .geo column if it exists (GEE artifact)
   if (".geo" %in% names(global_features)) {
     global_features <- global_features %>%
