@@ -28,7 +28,6 @@ var CONFIG = {
   // MEMORY OPTIMIZATION: Use larger scale for extraction
   extractionScale: 100,              // 100m resolution (reduces memory)
   tileScale: 4,                      // Process in smaller tiles
-  bestEffort: true,                  // Allow GEE to reduce resolution if needed
 
   // Temporal (keep narrow to reduce memory)
   yearStart: 2021,                   // Narrowed from 2020
@@ -250,13 +249,12 @@ print('All bands:', allFeatures.bandNames());
 
 print('\n=== Extracting at Core Locations (Optimized) ===');
 
-// OPTIMIZATION: Use higher scale, tileScale, and bestEffort
+// OPTIMIZATION: Use higher scale and tileScale to reduce memory usage
 var coresWithCovariates = allFeatures.reduceRegions({
   collection: cores,
   reducer: ee.Reducer.first(),
   scale: CONFIG.extractionScale,      // 100m instead of 30m
-  tileScale: CONFIG.tileScale,        // Process in smaller tiles
-  bestEffort: CONFIG.bestEffort       // Allow GEE to optimize
+  tileScale: CONFIG.tileScale         // Process in smaller tiles
 });
 
 print('✓ Extraction complete');
@@ -309,13 +307,12 @@ print('   • Thermal: 3 features');
 print('   • SAR: 4 features');
 
 print('\n⚡ MEMORY OPTIMIZATIONS:');
-print('• Extraction scale: 100m (reduces pixels)');
-print('• Tile scale: 4 (smaller chunks)');
-print('• Best effort: enabled');
-print('• Filtered collections by point locations');
-print('• Narrowed date range: 2021-2023');
-print('• Reduced composite complexity');
-print('• Smaller speckle filter for SAR');
+print('• Extraction scale: 100m (reduces pixels by 90%)');
+print('• Tile scale: 4 (smaller processing chunks)');
+print('• Filtered collections by point locations (filterBounds)');
+print('• Narrowed date range: 2021-2023 (3 years)');
+print('• Reduced composite complexity (31 features)');
+print('• Smaller speckle filter for SAR (5 pixels)');
 
 print('\n📋 NEXT STEPS:');
 print('1. Go to Tasks tab (top right)');
