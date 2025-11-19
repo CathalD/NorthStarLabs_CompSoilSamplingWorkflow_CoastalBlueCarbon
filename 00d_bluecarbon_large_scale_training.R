@@ -126,16 +126,27 @@ log_message("Configuration loaded")
 
 log_message("\n=== STEP 1: LOAD JANOUSEK ET AL. 2025 DATASET ===")
 
-#' Load and prepare Janousek blue carbon dataset
+#' Load and prepare Janousek blue carbon dataset (two-file structure)
+#'
+#' The Janousek dataset comes in two parts:
+#' 1. Core_Locations: Core-level metadata (lat, lon, ecosystem, etc.)
+#' 2. Samples: Sample-level measurements (depth, BD, SOC, etc.)
+#'
 load_janousek_data <- function() {
 
-  data_file <- "Janousek_Core_BCOnly - LargeScaleAnalysis.csv"
+  # File names
+  core_locations_file <- "Janousek_Core_Locations.csv"
+  samples_file <- "Janousek_Samples.csv"
 
-  if (!file.exists(data_file)) {
-    stop("\nJanousek dataset not found: ", data_file, "\n\n",
+  # Check if files exist
+  if (!file.exists(core_locations_file)) {
+    stop("\nJanousek Core Locations file not found: ", core_locations_file, "\n\n",
          "Please download from:\n",
          "https://smithsonian.figshare.com/articles/dataset/Dataset_Carbon_stocks_and_environmental_driver_data_for_blue_carbon_ecosystems_along_the_Pacific_coast_of_North_America/28127486\n\n",
-         "Place the file in the repository root directory.\n\n",
+         "Expected files:\n",
+         "  1. Janousek_Core_Locations.csv (core metadata)\n",
+         "  2. Janousek_Samples.csv (sample measurements)\n\n",
+         "Place both files in the repository root directory.\n\n",
          "Dataset info:\n",
          "  - 1,284 cores from Pacific coast North America\n",
          "  - Ecosystems: marsh, seagrass, mangrove, tidal swamp, tideflat\n",
@@ -143,22 +154,72 @@ load_janousek_data <- function() {
          "  - DOI: 10.1029/2024GB008239\n")
   }
 
-  log_message(sprintf("Loading dataset: %s", data_file))
+  if (!file.exists(samples_file)) {
+    stop("\nJanousek Samples file not found: ", samples_file, "\n\n",
+         "Please download from:\n",
+         "https://smithsonian.figshare.com/articles/dataset/Dataset_Carbon_stocks_and_environmental_driver_data_for_blue_carbon_ecosystems_along_the_Pacific_coast_of_North_America/28127486\n\n",
+         "Expected files:\n",
+         "  1. Janousek_Core_Locations.csv (core metadata)\n",
+         "  2. Janousek_Samples.csv (sample measurements)\n\n",
+         "Place both files in the repository root directory.\n")
+  }
 
-  # Read data
-  data <- read_csv(data_file, show_col_types = FALSE)
+  log_message("Loading Janousek dataset (2-file structure)...")
 
-  log_message(sprintf("Dataset loaded: %d rows, %d columns", nrow(data), ncol(data)))
-  log_message(sprintf("Column names: %s", paste(head(names(data), 10), collapse = ", ")))
+  # Load core locations
+  log_message(sprintf("Loading core locations: %s", core_locations_file))
+  core_locations <- read_csv(core_locations_file, show_col_types = FALSE)
+
+  log_message(sprintf("Core locations loaded: %d cores, %d columns",
+                     nrow(core_locations), ncol(core_locations)))
+  log_message(sprintf("Core location columns: %s",
+                     paste(names(core_locations), collapse = ", ")))
+
+  # Load samples
+  log_message(sprintf("Loading samples: %s", samples_file))
+  samples <- read_csv(samples_file, show_col_types = FALSE)
+
+  log_message(sprintf("Samples loaded: %d samples, %d columns",
+                     nrow(samples), ncol(samples)))
+  log_message(sprintf("Sample columns: %s",
+                     paste(names(samples), collapse = ", ")))
 
   # Display structure for user
-  cat("\nDataset structure:\n")
-  print(str(data))
+  cat("\n=== CORE LOCATIONS STRUCTURE ===\n")
+  print(str(core_locations))
+  cat("\nFirst few core locations:\n")
+  print(head(core_locations))
 
-  cat("\nFirst few rows:\n")
-  print(head(data))
+  cat("\n=== SAMPLES STRUCTURE ===\n")
+  print(str(samples))
+  cat("\nFirst few samples:\n")
+  print(head(samples))
 
-  return(data)
+  # Check for sample_id in both datasets
+  if (!"sample_id" %in% names(core_locations)) {
+    stop("'sample_id' column not found in core_locations. Check column names.")
+  }
+
+  if (!"sample_id" %in% names(samples)) {
+    stop("'sample_id' column not found in samples. Check column names.")
+  }
+
+  # Join datasets
+  log_message("Joining core locations with samples on 'sample_id'...")
+
+  combined_data <- samples %>%
+    left_join(core_locations, by = "sample_id")
+
+  log_message(sprintf("Combined dataset: %d rows (samples)", nrow(combined_data)))
+
+  # Check for missing joins
+  n_missing <- sum(is.na(combined_data$latitude))
+  if (n_missing > 0) {
+    log_message(sprintf("WARNING: %d samples have missing location data", n_missing),
+               "WARNING")
+  }
+
+  return(combined_data)
 }
 
 # Load dataset
@@ -183,81 +244,64 @@ log_message("\n=== STEP 2: HARMONIZE DATA TO VM0033 STANDARD ===")
 
 #' Harmonize Janousek data to VM0033 format
 #'
-#' This function processes the Janousek dataset to match the expected format
-#' for Module 05c. Adjust column names based on actual dataset structure.
+#' This function processes the Janousek dataset (2-file structure) to match
+#' the expected format for Module 05c.
 #'
-#' @param data Raw Janousek dataset
+#' Column structure from Janousek dataset:
+#' Core_Locations: sample_id, latitude, longitude, ecosystem, ecoregion, core_depth
+#' Samples: sample_id, SubSampleID, depth_min, depth_max, bulk_density,
+#'          soc_percent, carbon_density_gpercm3
+#'
+#' @param data Combined Janousek dataset (samples joined with core locations)
 #' @return Harmonized data frame
 harmonize_janousek_data <- function(data) {
 
-  log_message("Harmonizing dataset to VM0033 standard depths...")
+  log_message("Harmonizing Janousek dataset to VM0033 standard depths...")
 
-  # IMPORTANT: Adjust these column mappings based on actual dataset columns
-  # The user should inspect the dataset and modify as needed
-
-  # Expected Janousek columns (adjust based on actual data):
-  # - core_id or site_id
-  # - latitude, longitude (or lat, lon)
-  # - depth_top, depth_bottom (or depth_min, depth_max)
-  # - bulk_density or BD
-  # - organic_carbon or OC or SOC (% or g/kg)
-  # - ecosystem_type or habitat_type
-  # - elevation or z_star (tidal elevation)
-
-  # Standardize column names (example mapping - ADJUST AS NEEDED)
+  # Convert to lowercase for consistent column access
   data_harmonized <- data %>%
-    rename_with(~tolower(.), everything()) %>%
+    rename_with(~tolower(.), everything())
+
+  # Check for required columns
+  required_cols <- c("sample_id", "latitude", "longitude", "depth_min", "depth_max",
+                    "bulk_density", "soc_percent", "ecosystem")
+
+  missing_cols <- setdiff(required_cols, names(data_harmonized))
+
+  if (length(missing_cols) > 0) {
+    stop("Missing required columns: ", paste(missing_cols, collapse = ", "), "\n",
+         "Available columns: ", paste(names(data_harmonized), collapse = ", "))
+  }
+
+  log_message("All required columns found")
+
+  # Standardize column names to workflow format
+  data_harmonized <- data_harmonized %>%
     mutate(
-      # Create standard IDs
-      sample_id = if ("core_id" %in% names(.)) core_id else row_number(),
+      # Depth intervals (Janousek uses depth_min, depth_max)
+      depth_top_cm = depth_min,
+      depth_bottom_cm = depth_max,
+      depth_cm = (depth_min + depth_max) / 2,
 
-      # Standardize coordinates (adjust column names as needed)
-      latitude = if ("latitude" %in% names(.)) latitude else
-                 if ("lat" %in% names(.)) lat else NA_real_,
+      # Bulk density (already in g/cm³)
+      bd_g_cm3 = bulk_density,
 
-      longitude = if ("longitude" %in% names(.)) longitude else
-                  if ("lon" %in% names(.)) lon else NA_real_,
+      # SOC: Convert from percent to g/kg
+      # soc_percent is in %, so multiply by 10 to get g/kg
+      soc_g_kg = soc_percent * 10,
 
-      # Depth intervals (adjust column names as needed)
-      depth_top_cm = if ("depth_top" %in% names(.)) depth_top else
-                     if ("depth_min" %in% names(.)) depth_min else NA_real_,
+      # Ecosystem type (already correct name)
+      # ecosystem = ecosystem (already exists)
 
-      depth_bottom_cm = if ("depth_bottom" %in% names(.)) depth_bottom else
-                        if ("depth_max" %in% names(.)) depth_max else NA_real_,
+      # Ecoregion (if available)
+      ecoregion = if ("ecoregion" %in% names(.)) ecoregion else NA_character_,
 
-      depth_cm = (depth_top_cm + depth_bottom_cm) / 2,
+      # Core depth (if available from Core_Locations)
+      core_depth_cm = if ("core_depth" %in% names(.)) core_depth else NA_real_,
 
-      # Bulk density (g/cm³)
-      bd_g_cm3 = if ("bulk_density" %in% names(.)) bulk_density else
-                 if ("bd" %in% names(.)) bd else NA_real_,
-
-      # Organic carbon (convert to g/kg if needed)
-      # If OC is in %, multiply by 10 to get g/kg
-      soc_g_kg = if ("organic_carbon" %in% names(.)) {
-        if (max(organic_carbon, na.rm = TRUE) < 100) {
-          organic_carbon * 10  # Convert % to g/kg
-        } else {
-          organic_carbon  # Already in g/kg
-        }
-      } else if ("soc" %in% names(.)) {
-        if (max(soc, na.rm = TRUE) < 100) {
-          soc * 10
-        } else {
-          soc
-        }
-      } else {
-        NA_real_
-      },
-
-      # Ecosystem type
-      ecosystem = if ("ecosystem_type" %in% names(.)) ecosystem_type else
-                  if ("habitat_type" %in% names(.)) habitat_type else
-                  if ("vegetation_type" %in% names(.)) vegetation_type else
-                  "unknown",
-
-      # Tidal elevation (if available)
-      z_star = if ("z_star" %in% names(.)) z_star else
-               if ("elevation" %in% names(.)) elevation else NA_real_
+      # SubSampleID (keep for reference)
+      subsample_id = if ("subsampleid" %in% names(.)) subsampleid else
+                    if ("subsampled" %in% names(.)) subsampled else NA_character_
     )
 
   # Remove samples with missing critical data
@@ -286,8 +330,41 @@ harmonize_janousek_data <- function(data) {
   data_harmonized <- data_harmonized %>%
     mutate(
       layer_thickness_cm = depth_bottom_cm - depth_top_cm,
-      carbon_stock_kg_m2 = (soc_g_kg * bd_g_cm3 * layer_thickness_cm) / 1000
+
+      # Calculate carbon stock (kg/m²)
+      # Formula: SOC (g/kg) × BD (g/cm³) × thickness (cm) / 1000
+      carbon_stock_kg_m2 = (soc_g_kg * bd_g_cm3 * layer_thickness_cm) / 1000,
+
+      # Note: Janousek dataset also has carbon_density_gpercm3
+      # We calculate carbon_stock ourselves for consistency with workflow
+      # But keep original for validation if needed
+      carbon_density_original = if ("carbon_density_gpercm3" %in% names(.)) {
+        carbon_density_gpercm3
+      } else {
+        NA_real_
+      }
     )
+
+  # Validate our calculation against Janousek's carbon_density (if available)
+  if ("carbon_density_gpercm3" %in% names(data_harmonized)) {
+    # Convert our carbon_stock back to g/cm³ for comparison
+    data_harmonized <- data_harmonized %>%
+      mutate(
+        carbon_density_calculated = (soc_g_kg * bd_g_cm3) / 1000,
+        density_diff = abs(carbon_density_calculated - carbon_density_original)
+      )
+
+    mean_diff <- mean(data_harmonized$density_diff, na.rm = TRUE)
+    log_message(sprintf("Validation: Mean difference with Janousek carbon_density: %.6f g/cm³",
+                       mean_diff))
+
+    if (mean_diff > 0.01) {
+      log_message("WARNING: Large discrepancy with original carbon_density values", "WARNING")
+      log_message("Check SOC unit conversion (% to g/kg)", "WARNING")
+    } else {
+      log_message("Validation PASSED: Carbon calculation matches Janousek data ✓")
+    }
+  }
 
   # Assign to standard VM0033 depths
   data_harmonized <- data_harmonized %>%

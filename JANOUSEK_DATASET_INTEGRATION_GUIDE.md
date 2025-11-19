@@ -91,23 +91,39 @@
 - Environmental driver data
 - Data dictionary
 
-### Step 2: Extract Relevant File
+### Step 2: Extract Dataset Files
 
-The dataset contains multiple files. You mentioned you have:
-```
-Janousek_Core_BCOnly - LargeScaleAnalysis.csv
-```
+The Janousek dataset comes in **two separate files**:
 
-This appears to be a pre-processed version containing:
-- Core-level blue carbon data
-- Ready for large-scale analysis
-- Likely includes all 1,284 cores
+1. **`Janousek_Core_Locations.csv`** - Core-level metadata
+   - sample_id (unique core identifier)
+   - latitude, longitude (WGS84 coordinates)
+   - ecosystem (marsh, seagrass, mangrove, etc.)
+   - ecoregion (regional classification)
+   - core_depth (total core depth in cm)
 
-### Step 3: Place in Repository
+2. **`Janousek_Samples.csv`** - Sample-level measurements
+   - sample_id (links to Core_Locations)
+   - SubSampleID (unique subsample identifier)
+   - depth_min, depth_max (depth interval in cm)
+   - bulk_density (g/cm³)
+   - soc_percent (soil organic carbon in %)
+   - carbon_density_gpercm3 (carbon density in g/cm³)
+
+### Step 3: Place Files in Repository
+
+Both files must be in the repository root:
 
 ```bash
-# Copy to repository root
-cp "Janousek_Core_BCOnly - LargeScaleAnalysis.csv" /path/to/your/blue/carbon/workflow/
+# Copy both files to repository root
+cp Janousek_Core_Locations.csv /path/to/your/blue/carbon/workflow/
+cp Janousek_Samples.csv /path/to/your/blue/carbon/workflow/
+
+# Verify both files are present
+ls Janousek_*.csv
+# Should show:
+# Janousek_Core_Locations.csv
+# Janousek_Samples.csv
 ```
 
 ---
@@ -170,60 +186,65 @@ cp "Janousek_Core_BCOnly - LargeScaleAnalysis.csv" /path/to/your/blue/carbon/wor
 
 ---
 
-## 📝 Expected Dataset Columns
+## 📝 Actual Dataset Structure
 
-### Based on Janousek et al. 2025 Paper
+### Two-File Structure (Confirmed)
 
-The dataset likely contains columns similar to:
+The Janousek dataset uses a **relational structure** with two CSV files:
 
-**Core Identification:**
-- `core_id` or `site_id` - Unique identifier
-- `study_id` or `source` - Original data source
-- `year` - Sampling year
+#### File 1: `Janousek_Core_Locations.csv`
 
-**Spatial:**
-- `latitude`, `longitude` - WGS84 coordinates
-- `ecoregion` - Ecoregion classification
-- `climate_zone` - Köppen-Geiger zone
+Core-level metadata (one row per core):
 
-**Depth:**
-- `depth_top` or `depth_min` - Top of layer (cm)
-- `depth_bottom` or `depth_max` - Bottom of layer (cm)
+| Column | Description | Example |
+|--------|-------------|---------|
+| `sample_id` | Unique core identifier | "CORE_001" |
+| `latitude` | WGS84 latitude | 48.5234 |
+| `longitude` | WGS84 longitude | -123.4567 |
+| `ecosystem` | Ecosystem type | "Emergent marsh" |
+| `ecoregion` | Regional classification | "Puget Sound" |
+| `core_depth` | Total core depth (cm) | 100 |
 
-**Carbon Data:**
-- `bulk_density` or `BD` - g/cm³
-- `organic_carbon` or `OC` or `SOC` - % or g/kg
-- `organic_matter` or `OM` - % (if OC not available)
+#### File 2: `Janousek_Samples.csv`
 
-**Ecosystem:**
-- `ecosystem_type` or `habitat_type` - Marsh, seagrass, mangrove, etc.
-- `vegetation_type` - Specific plant community
-- `z_star` or `elevation` - Standardized tidal elevation
+Sample-level measurements (multiple rows per core):
 
-**Environmental (optional):**
-- `grain_size` - Sediment texture
-- `salinity` - Porewater salinity
-- `tidal_range` - Local tidal range
+| Column | Description | Example |
+|--------|-------------|---------|
+| `sample_id` | Links to Core_Locations | "CORE_001" |
+| `SubSampleID` | Unique subsample ID | "CORE_001_S01" |
+| `depth_min` | Top of layer (cm) | 0 |
+| `depth_max` | Bottom of layer (cm) | 15 |
+| `bulk_density` | Bulk density (g/cm³) | 0.85 |
+| `soc_percent` | Soil organic carbon (%) | 4.5 |
+| `carbon_density_gpercm3` | Carbon density (g/cm³) | 0.038 |
 
-### Action Required
+### Relationship Between Files
 
-**Inspect the actual dataset columns:**
-
-```r
-# Load dataset to see structure
-data <- read.csv("Janousek_Core_BCOnly - LargeScaleAnalysis.csv")
-
-# Check column names
-names(data)
-
-# View first few rows
-head(data)
-
-# Get structure
-str(data)
+```
+Core_Locations (1,284 cores)
+    └─── Samples (multiple samples per core)
+         Joined on: sample_id
 ```
 
-Then **modify Module 00D-BC** in the `harmonize_janousek_data()` function to match your actual column names.
+**Example:**
+- Core "CORE_001" in `Core_Locations`: lat=48.52, lon=-123.45, ecosystem="marsh"
+- Samples in `Samples`:
+  - CORE_001_S01: depth 0-15cm, BD=0.85, SOC=4.5%
+  - CORE_001_S02: depth 15-30cm, BD=0.92, SOC=3.8%
+  - CORE_001_S03: depth 30-50cm, BD=1.05, SOC=2.1%
+  - etc.
+
+### Module 00D-BC Handles This Automatically
+
+The updated module:
+1. ✅ Loads both files separately
+2. ✅ Joins on `sample_id`
+3. ✅ Converts `soc_percent` to g/kg (multiply by 10)
+4. ✅ Validates against `carbon_density_gpercm3`
+5. ✅ Assigns to VM0033 standard depths
+
+**No manual modification needed** - the column mappings are hardcoded based on the confirmed structure!
 
 ---
 
@@ -367,10 +388,15 @@ The auto-generated script `GEE_EXTRACT_JANOUSEK_COVARIATES.js` includes all thes
 
 ## 🚀 Quick Start Commands
 
-### Step 1: Place Dataset
+### Step 1: Place Both Dataset Files
 ```bash
-# Ensure file is in repository root
-ls "Janousek_Core_BCOnly - LargeScaleAnalysis.csv"
+# Ensure both files are in repository root
+ls Janousek_Core_Locations.csv
+ls Janousek_Samples.csv
+
+# Or check both at once
+ls Janousek_*.csv
+# Should show both files
 ```
 
 ### Step 2: Run Module 00D-BC (First Time)
