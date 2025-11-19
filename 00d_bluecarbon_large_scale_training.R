@@ -309,6 +309,29 @@ harmonize_janousek_data <- function(data) {
 
   log_message("All required columns found")
 
+  # Convert numeric columns to numeric type (in case they were read as character)
+  log_message("Converting numeric columns to proper types...")
+
+  numeric_cols <- c("latitude", "longitude", "depth_min", "depth_max",
+                   "bulk_density", "soc_percent", "carbon_density_gpercm3")
+
+  for (col in numeric_cols) {
+    if (col %in% names(data_harmonized)) {
+      data_harmonized[[col]] <- as.numeric(data_harmonized[[col]])
+    }
+  }
+
+  # Check for conversion issues
+  n_na_soc <- sum(is.na(data_harmonized$soc_percent))
+  n_na_bd <- sum(is.na(data_harmonized$bulk_density))
+
+  if (n_na_soc > 0) {
+    log_message(sprintf("WARNING: %d NA values in soc_percent after conversion", n_na_soc), "WARNING")
+  }
+  if (n_na_bd > 0) {
+    log_message(sprintf("WARNING: %d NA values in bulk_density after conversion", n_na_bd), "WARNING")
+  }
+
   # Standardize column names to workflow format
   data_harmonized <- data_harmonized %>%
     mutate(
