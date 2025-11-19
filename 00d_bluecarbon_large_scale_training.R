@@ -221,9 +221,30 @@ load_janousek_data <- function() {
   log_message("Joining core locations with samples on 'sample_id'...")
 
   combined_data <- samples %>%
-    left_join(core_locations, by = "sample_id")
+    left_join(core_locations, by = "sample_id", suffix = c("_sample", "_core"))
 
   log_message(sprintf("Combined dataset: %d rows (samples)", nrow(combined_data)))
+
+  # Handle duplicate columns - prefer core_locations version for metadata
+  # Remove _sample versions if both _sample and _core exist
+  duplicate_cols <- names(combined_data)[grepl("_sample$", names(combined_data))]
+
+  if (length(duplicate_cols) > 0) {
+    log_message(sprintf("Found %d duplicate columns from join", length(duplicate_cols)))
+
+    for (col_with_suffix in duplicate_cols) {
+      base_name <- sub("_sample$", "", col_with_suffix)
+      core_version <- paste0(base_name, "_core")
+
+      if (core_version %in% names(combined_data)) {
+        # Remove _sample version, rename _core version to base name
+        combined_data[[base_name]] <- combined_data[[core_version]]
+        combined_data[[col_with_suffix]] <- NULL
+        combined_data[[core_version]] <- NULL
+        log_message(sprintf("  Resolved duplicate: kept '%s' from core_locations", base_name))
+      }
+    }
+  }
 
   # Check for missing joins
   n_missing <- sum(is.na(combined_data$latitude))
