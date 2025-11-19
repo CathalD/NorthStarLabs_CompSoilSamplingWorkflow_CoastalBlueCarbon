@@ -190,6 +190,84 @@ if (!file.exists(CONFIG$global_features)) {
 }
 
 # ============================================================================
+# STEP 1b: EXTRACT LOCAL COVARIATES FROM RASTERS
+# ============================================================================
+
+cat("\n=== STEP 1b: Extract Local Covariates ===\n\n")
+
+# Check if covariates folder exists
+if (!dir.exists("covariates")) {
+  cat("WARNING: Covariates folder not found!\n")
+  cat("Expected: ./covariates/\n")
+  cat("Checking if covariates are already in the cores CSV...\n\n")
+
+  # Check if already in CSV
+  if (!all(c("NDVI_median_annual", "elevation_m") %in% names(cores_merged))) {
+    cat("ERROR: No covariates folder and covariates not in CSV.\n")
+    cat("\nPlease either:\n")
+    cat("1. Create ./covariates/ folder and add GEE covariate exports (.tif files)\n")
+    cat("2. Or run a module that extracts covariates to your cores CSV first\n\n")
+    quit(save = "no", status = 1)
+  }
+
+  cat("✓ Covariates found in CSV, skipping extraction\n")
+
+} else {
+
+  # Load covariate rasters
+  cat("Loading covariate rasters from ./covariates/...\n")
+
+  covariate_files <- list.files("covariates", pattern = "\\.tif$",
+                                full.names = TRUE, recursive = TRUE)
+
+  if (length(covariate_files) == 0) {
+    cat("ERROR: No .tif files found in covariates/ folder\n\n")
+    quit(save = "no", status = 1)
+  }
+
+  cat(sprintf("✓ Found %d covariate files\n", length(covariate_files)))
+
+  # Load raster stack
+  covariate_stack <- rast(covariate_files)
+  cat(sprintf("✓ Loaded %d covariate layers\n", nlyr(covariate_stack)))
+
+  # Clean layer names (remove file extensions)
+  original_names <- names(covariate_stack)
+  clean_names <- gsub("\\.tif$|\\.tiff$", "", basename(original_names))
+  names(covariate_stack) <- clean_names
+
+  cat("  Available covariates:", paste(head(clean_names, 5), collapse = ", "))
+  if (length(clean_names) > 5) {
+    cat(sprintf(" ... and %d more\n", length(clean_names) - 5))
+  } else {
+    cat("\n")
+  }
+
+  # Create spatial points from cores
+  if (!all(c("longitude", "latitude") %in% names(cores_merged))) {
+    cat("ERROR: Cores CSV must have 'longitude' and 'latitude' columns\n\n")
+    quit(save = "no", status = 1)
+  }
+
+  cores_sf <- cores_merged %>%
+    filter(!is.na(longitude), !is.na(latitude)) %>%
+    st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
+
+  # Transform to match covariate CRS
+  cores_sf <- st_transform(cores_sf, crs = crs(covariate_stack))
+
+  cat(sprintf("✓ Extracting covariates at %d core locations...\n", nrow(cores_sf)))
+
+  # Extract covariate values
+  covariate_values <- terra::extract(covariate_stack, cores_sf, ID = FALSE)
+
+  # Add to cores_merged
+  cores_merged <- bind_cols(cores_merged, covariate_values)
+
+  cat(sprintf("✓ Added %d covariate columns to cores\n", ncol(covariate_values)))
+}
+
+# ============================================================================
 # STEP 2: PREPARE TRAINING DATA
 # ============================================================================
 
@@ -203,7 +281,15 @@ missing_local <- setdiff(required_local, names(cores_merged))
 if (length(missing_local) > 0) {
   cat("ERROR: Missing required local covariates:\n")
   cat(paste("  -", missing_local, collapse = "\n"), "\n")
-  cat("\nPlease extract local covariates (Sentinel-2, elevation) first.\n\n")
+  cat("\nThe following covariates are required but not found:\n")
+  cat("  NDVI_median_annual - Sentinel-2 NDVI (annual median)\n")
+  cat("  elevation_m - DEM elevation\n\n")
+  cat("Available columns in merged data:\n")
+  cat(paste("  ", head(names(cores_merged), 10), collapse = "\n"), "\n")
+  if (ncol(cores_merged) > 10) {
+    cat(sprintf("  ... and %d more\n", ncol(cores_merged) - 10))
+  }
+  cat("\nPlease ensure your covariate rasters in ./covariates/ have these exact names.\n\n")
   quit(save = "no", status = 1)
 }
 
