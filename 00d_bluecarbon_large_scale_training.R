@@ -204,6 +204,19 @@ load_janousek_data <- function() {
     stop("'sample_id' column not found in samples. Check column names.")
   }
 
+  # Convert sample_id to character in both datasets to ensure compatibility
+  # This handles cases where one file has numeric IDs and other has character IDs
+  log_message("Standardizing sample_id types for joining...")
+
+  core_locations <- core_locations %>%
+    mutate(sample_id = as.character(sample_id))
+
+  samples <- samples %>%
+    mutate(sample_id = as.character(sample_id))
+
+  log_message(sprintf("Core locations sample_id type: %s", class(core_locations$sample_id)))
+  log_message(sprintf("Samples sample_id type: %s", class(samples$sample_id)))
+
   # Join datasets
   log_message("Joining core locations with samples on 'sample_id'...")
 
