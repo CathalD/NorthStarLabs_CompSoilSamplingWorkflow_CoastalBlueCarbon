@@ -457,13 +457,8 @@ harmonize_janousek_data <- function(data) {
 # Harmonize data
 harmonized_data <- harmonize_janousek_data(janousek_data)
 
-# Create output directory if it doesn't exist
-if (!dir.exists("data_global")) {
-  dir.create("data_global", recursive = TRUE)
-  log_message("Created directory: data_global/")
-}
-
 # Save harmonized data for inspection
+# NOTE: data_global/ directory should be created by running 00b_setup_directories.R first
 write_csv(harmonized_data,
           "data_global/janousek_harmonized_bluecarbon.csv")
 log_message("Harmonized data saved to: data_global/janousek_harmonized_bluecarbon.csv")
@@ -791,18 +786,7 @@ train_bluecarbon_rf <- function(data, covariate_names, depth, config) {
 log_message(sprintf("Training models for %d depths...",
                    length(BC_CONFIG$target_depths)))
 
-# Create output directories if they don't exist
-output_dirs <- c(
-  "outputs/models/large_scale_bluecarbon",
-  "diagnostics/large_scale_bluecarbon"
-)
-
-for (dir_path in output_dirs) {
-  if (!dir.exists(dir_path)) {
-    dir.create(dir_path, recursive = TRUE)
-    log_message(sprintf("Created directory: %s", dir_path))
-  }
-}
+# NOTE: Output directories should be created by running 00b_setup_directories.R first
 
 bc_models <- list()
 

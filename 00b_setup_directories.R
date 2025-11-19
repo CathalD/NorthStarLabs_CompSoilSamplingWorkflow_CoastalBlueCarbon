@@ -19,6 +19,7 @@ cat("Creating workflow directories...\n\n")
 core_dirs <- c(
   "data_raw",           # Field data input (used by all modules)
   "data_processed",     # Processed R objects (heavily used)
+  "data_global",        # Large-scale datasets (Module 00d: transfer learning)
   "logs"                # Log files (all modules write here)
 )
 
@@ -37,6 +38,7 @@ output_dirs <- c(
   "outputs/models",
   "outputs/models/kriging",        # Module 04: saved kriging models
   "outputs/models/rf",             # Module 05: saved RF models
+  "outputs/models/large_scale_bluecarbon",  # Module 00d: global transfer learning models
   "outputs/predictions",
   "outputs/predictions/kriging",   # Module 04: kriging predictions
   "outputs/predictions/rf",        # Module 05: RF predictions
@@ -52,7 +54,8 @@ diagnostic_dirs <- c(
   "diagnostics/data_prep",         # Module 01: data prep diagnostics
   "diagnostics/qaqc",              # Module 01: QA/QC reports
   "diagnostics/variograms",        # Module 04: variogram plots
-  "diagnostics/crossvalidation"    # Modules 04 & 05: CV metrics
+  "diagnostics/crossvalidation",   # Modules 04 & 05: CV metrics
+  "diagnostics/large_scale_bluecarbon"  # Module 00d: transfer learning diagnostics
 )
 
 # Combine all required directories
