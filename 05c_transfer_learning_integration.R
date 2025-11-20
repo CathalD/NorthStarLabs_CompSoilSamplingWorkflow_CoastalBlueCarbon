@@ -98,10 +98,19 @@ if (use_global) {
   # Find common columns
   common_cols <- intersect(names(local_cores), names(global_cores))
 
-  # Combine on common columns
+  # Add latitude/longitude to common columns if they exist in local data
+  # (these may not be in global dataset but we need them for covariate extraction)
+  if ("latitude" %in% names(local_cores) && !"latitude" %in% common_cols) {
+    common_cols <- c(common_cols, "latitude")
+  }
+  if ("longitude" %in% names(local_cores) && !"longitude" %in% common_cols) {
+    common_cols <- c(common_cols, "longitude")
+  }
+
+  # Combine on common columns (will add NAs for global rows where coords don't exist)
   combined_data <- bind_rows(
-    local_cores %>% select(all_of(common_cols)),
-    global_cores %>% select(all_of(common_cols))
+    local_cores %>% select(any_of(common_cols)),
+    global_cores %>% select(any_of(common_cols))
   )
 
   cat(sprintf("✓ Combined: %d total samples\n", nrow(combined_data)))
@@ -190,7 +199,8 @@ exclude_cols <- c("core_id", "sample_id", "latitude", "longitude", "ecosystem",
 # Find numeric predictors
 all_cols <- names(combined_data)
 predictor_cols <- setdiff(all_cols, exclude_cols)
-predictor_cols <- predictor_cols[sapply(combined_data[predictor_cols], is.numeric)]
+numeric_check <- sapply(combined_data[predictor_cols], is.numeric)
+predictor_cols <- predictor_cols[numeric_check]
 
 if (length(predictor_cols) == 0) {
   cat("\nWARNING: No predictor variables found!\n")
