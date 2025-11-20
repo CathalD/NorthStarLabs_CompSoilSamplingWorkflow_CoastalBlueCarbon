@@ -195,18 +195,45 @@ if (!file.exists(CONFIG$global_features)) {
 
 cat("\n=== STEP 1b: Extract Local Covariates ===\n\n")
 
-# Check if covariates folder exists
-if (!dir.exists("covariates")) {
-  cat("WARNING: Covariates folder not found!\n")
-  cat("Expected: ./covariates/\n")
+# Search for covariates in multiple possible locations
+covariate_paths <- c(
+  "covariates",
+  "data_processed/covariates",
+  "outputs/covariates",
+  "data_raw/covariates",
+  "."  # Also check root directory
+)
+
+covariate_dir <- NULL
+for (path in covariate_paths) {
+  if (dir.exists(path)) {
+    # Check if this directory actually has .tif files
+    test_files <- list.files(path,
+                            pattern = "\\.(tif|tiff|TIF|TIFF)$",
+                            full.names = FALSE,
+                            recursive = TRUE,
+                            ignore.case = TRUE)
+    if (length(test_files) > 0) {
+      covariate_dir <- path
+      cat(sprintf("✓ Found covariates folder: %s\n", path))
+      break
+    }
+  }
+}
+
+if (is.null(covariate_dir)) {
+  cat("WARNING: No covariates folder with .tif files found!\n")
+  cat("Searched locations:\n")
+  cat(paste("  -", covariate_paths, collapse = "\n"), "\n\n")
   cat("Checking if covariates are already in the cores CSV...\n\n")
 
   # Check if already in CSV
-  if (!all(c("NDVI_median_annual", "elevation_m") %in% names(cores_merged))) {
+  if (!any(grepl("NDVI|ndvi|elevation|elev", names(cores_merged), ignore.case = TRUE))) {
     cat("ERROR: No covariates folder and covariates not in CSV.\n")
     cat("\nPlease either:\n")
     cat("1. Create ./covariates/ folder and add GEE covariate exports (.tif files)\n")
-    cat("2. Or run a module that extracts covariates to your cores CSV first\n\n")
+    cat("2. Or provide the full path to your covariates folder\n")
+    cat("3. Or run a module that extracts covariates to your cores CSV first\n\n")
     quit(save = "no", status = 1)
   }
 
@@ -214,33 +241,36 @@ if (!dir.exists("covariates")) {
 
 } else {
 
-  # Load covariate rasters
-  cat("Loading covariate rasters from ./covariates/...\n")
+  # Find ALL .tif files (case insensitive, any subdirectory, any extension variant)
+  covariate_files <- list.files(covariate_dir,
+                                pattern = "\\.(tif|tiff|TIF|TIFF)$",
+                                full.names = TRUE,
+                                recursive = TRUE,
+                                ignore.case = TRUE)
 
-  covariate_files <- list.files("covariates", pattern = "\\.tif$",
-                                full.names = TRUE, recursive = TRUE)
-
-  if (length(covariate_files) == 0) {
-    cat("ERROR: No .tif files found in covariates/ folder\n\n")
-    quit(save = "no", status = 1)
+  cat(sprintf("\n✓ Found %d covariate files:\n", length(covariate_files)))
+  for (i in 1:min(15, length(covariate_files))) {
+    cat(sprintf("  %d. %s\n", i, basename(covariate_files[i])))
+  }
+  if (length(covariate_files) > 15) {
+    cat(sprintf("  ... and %d more\n", length(covariate_files) - 15))
   }
 
-  cat(sprintf("✓ Found %d covariate files\n", length(covariate_files)))
-
   # Load raster stack
+  cat("\nLoading rasters into stack...\n")
   covariate_stack <- rast(covariate_files)
   cat(sprintf("✓ Loaded %d covariate layers\n", nlyr(covariate_stack)))
 
-  # Clean layer names (remove file extensions)
-  original_names <- names(covariate_stack)
-  clean_names <- gsub("\\.tif$|\\.tiff$", "", basename(original_names))
+  # Clean layer names (remove path and any extension variant)
+  clean_names <- gsub("\\.(tif|tiff|TIF|TIFF)$", "", basename(covariate_files))
   names(covariate_stack) <- clean_names
 
-  cat("  Available covariates:", paste(head(clean_names, 5), collapse = ", "))
-  if (length(clean_names) > 5) {
-    cat(sprintf(" ... and %d more\n", length(clean_names) - 5))
-  } else {
-    cat("\n")
+  cat("\nCovariate layer names after loading:\n")
+  for (i in 1:min(15, length(clean_names))) {
+    cat(sprintf("  %s\n", clean_names[i]))
+  }
+  if (length(clean_names) > 15) {
+    cat(sprintf("  ... and %d more\n", length(clean_names) - 15))
   }
 
   # Create spatial points from cores
@@ -273,73 +303,91 @@ if (!dir.exists("covariates")) {
 
 cat("\n=== STEP 2: Prepare Training Data ===\n\n")
 
-# Check for required local covariates
-required_local <- c("NDVI_median_annual", "elevation_m")
+# Show all available columns
+cat("Available columns in merged dataset:\n")
+all_cols <- names(cores_merged)
+core_cols <- c("core_id", "sample_id", "latitude", "longitude", "depth_cm_midpoint", "carbon_stock_kg_m2")
+global_cols <- grep("^murray_|^gsw_|^wc_|^topo_|^sg_", all_cols, value = TRUE)
+covariate_cols <- setdiff(setdiff(all_cols, core_cols), global_cols)
 
-missing_local <- setdiff(required_local, names(cores_merged))
+cat(sprintf("\n  Core metadata columns (%d):\n", length(core_cols)))
+cat(paste("    ", head(intersect(core_cols, all_cols), 10), collapse = "\n"), "\n")
 
-if (length(missing_local) > 0) {
-  cat("ERROR: Missing required local covariates:\n")
-  cat(paste("  -", missing_local, collapse = "\n"), "\n")
-  cat("\nThe following covariates are required but not found:\n")
-  cat("  NDVI_median_annual - Sentinel-2 NDVI (annual median)\n")
-  cat("  elevation_m - DEM elevation\n\n")
-  cat("Available columns in merged data:\n")
-  cat(paste("  ", head(names(cores_merged), 10), collapse = "\n"), "\n")
-  if (ncol(cores_merged) > 10) {
-    cat(sprintf("  ... and %d more\n", ncol(cores_merged) - 10))
+cat(sprintf("\n  Local covariates (%d):\n", length(covariate_cols)))
+if (length(covariate_cols) > 0) {
+  cat(paste("    ", head(covariate_cols, 20), collapse = "\n"), "\n")
+  if (length(covariate_cols) > 20) {
+    cat(sprintf("    ... and %d more\n", length(covariate_cols) - 20))
   }
-  cat("\nPlease ensure your covariate rasters in ./covariates/ have these exact names.\n\n")
+} else {
+  cat("    (none found)\n")
+}
+
+if (use_transfer_learning && length(global_cols) > 0) {
+  cat(sprintf("\n  Global features (%d):\n", length(global_cols)))
+  cat(paste("    ", head(global_cols, 10), collapse = "\n"), "\n")
+  if (length(global_cols) > 10) {
+    cat(sprintf("    ... and %d more\n", length(global_cols) - 10))
+  }
+}
+
+# Check if we have at least SOME covariates to work with
+if (length(covariate_cols) == 0 && length(global_cols) == 0) {
+  cat("\nERROR: No covariate columns found!\n")
+  cat("Cannot train models without predictors.\n\n")
   quit(save = "no", status = 1)
 }
 
-# Define model formulas
-if (use_transfer_learning) {
+# Identify available standard covariates
+preferred_local <- c("NDVI_median_annual", "EVI_median_growing", "NDMI_median_annual",
+                    "VV_median", "VH_median", "elevation_m", "slope_degrees")
+available_local <- intersect(preferred_local, covariate_cols)
 
-  # Transfer learning model (local + global)
+# If preferred names not found, use ANY numeric covariates
+if (length(available_local) == 0) {
+  cat("\nNOTE: Standard covariate names not found. Using all available numeric columns.\n")
+  # Find numeric columns (excluding ID and target columns)
+  exclude_cols <- c(core_cols, global_cols, "ecosystem", "stratum", "site", "transect")
+  numeric_cols <- sapply(cores_merged, is.numeric)
+  available_local <- names(cores_merged)[numeric_cols & !names(cores_merged) %in% exclude_cols]
+  available_local <- setdiff(available_local, "carbon_stock_kg_m2")  # Don't use target as predictor!
+}
+
+cat(sprintf("\n✓ Using %d local covariates for modeling:\n", length(available_local)))
+cat(paste("  ", available_local, collapse = "\n"), "\n")
+
+# Build dynamic model formulas based on available columns
+# Local-only model (baseline)
+if (length(available_local) > 0) {
+  formula_local <- as.formula(
+    paste("carbon_stock_kg_m2 ~", paste(available_local, collapse = " + "))
+  )
+  cat(sprintf("\n✓ Local-only model formula created with %d covariates\n", length(available_local)))
+} else {
+  cat("\nWARNING: No local covariates available! Cannot train local-only model.\n")
+  formula_local <- NULL
+}
+
+# Transfer learning model (local + global)
+if (use_transfer_learning && length(global_cols) > 0) {
+  # Combine local and global features
+  all_predictors <- c(available_local, global_cols)
+
   formula_transfer <- as.formula(
-    carbon_stock_kg_m2 ~
-      # Local covariates
-      NDVI_median_annual +
-      EVI_median_growing +
-      NDMI_median_annual +
-      VV_median +
-      VH_median +
-      elevation_m +
-      slope_degrees +
-
-      # Global features (TRANSFER LEARNING!)
-      murray_tidal_flag +
-      gsw_water_occurrence_pct +
-      gsw_water_seasonality_months +
-      topo_tidal_elevation_flag +
-      wc_MAT_C +
-      wc_MAP_mm +
-      sg_terrestrial_soc_0_5cm_g_kg
+    paste("carbon_stock_kg_m2 ~", paste(all_predictors, collapse = " + "))
   )
 
-  cat("✓ Transfer learning model formula created\n")
-  cat("  Local covariates: 7\n")
-  cat("  Global features: 7\n")
+  cat(sprintf("✓ Transfer learning model formula created\n"))
+  cat(sprintf("    Local covariates: %d\n", length(available_local)))
+  cat(sprintf("    Global features: %d\n", length(global_cols)))
+  cat(sprintf("    Total predictors: %d\n", length(all_predictors)))
 
 } else {
   formula_transfer <- NULL
+  if (use_transfer_learning) {
+    cat("\nNOTE: Transfer learning disabled - no global features available\n")
+  }
 }
-
-# Local-only model (baseline for comparison)
-formula_local <- as.formula(
-  carbon_stock_kg_m2 ~
-    NDVI_median_annual +
-    EVI_median_growing +
-    NDMI_median_annual +
-    VV_median +
-    VH_median +
-    elevation_m +
-    slope_degrees
-)
-
-cat("✓ Local-only model formula created\n")
-cat("  Local covariates: 7\n")
 
 # ============================================================================
 # STEP 3: TRAIN MODELS BY DEPTH
