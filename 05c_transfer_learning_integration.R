@@ -1,26 +1,21 @@
 # ============================================================================
 # MODULE 05c: TRANSFER LEARNING INTEGRATION
 # ============================================================================
-# PURPOSE: Combine global features with local data for improved predictions
-# APPROACH: Add global baselines as features in Random Forest model
-# ============================================================================
+# PURPOSE: Combine local and global harmonized cores to train improved models
 #
-# WORKFLOW:
-# 1. Load your local field cores (from Module 03)
-# 2. Load global features (from GEE export)
-# 3. Merge datasets
-# 4. Train RF models (with/without transfer learning)
-# 5. Compare performance
-# 6. Make spatial predictions
+# PRIMARY GOAL:
+#   Train Random Forest models to predict carbon_stock_kg_m2 using:
+#   1. Local field data + Global dataset (Janousek) = More training data
+#   2. Compare performance with local-only vs combined dataset
 #
-# TRANSFER LEARNING MECHANISM:
-#   Regional_SOC = f(Local_Covariates, Global_Baselines)
+# INPUTS:
+#   - data_processed/cores_harmonized_bluecarbon.csv (from Module 03)
+#   - data_processed/global_cores_harmonized_VM0033.csv (from Module 03)
+#   - covariates/*.tif (optional - for local predictors)
 #
-#   The Random Forest learns how your site differs from:
-#   - Murray tidal classification
-#   - Global Surface Water inundation patterns
-#   - Terrestrial soils (SoilGrids)
-#
+# OUTPUTS:
+#   - outputs/models/transfer_learning/rf_depth_*.rds
+#   - diagnostics/transfer_learning/performance_summary.csv
 # ============================================================================
 
 suppressPackageStartupMessages({
@@ -30,645 +25,286 @@ suppressPackageStartupMessages({
   library(terra)
 })
 
-# ============================================================================
-# CONFIGURATION
-# ============================================================================
-
 cat("\n========================================\n")
-cat("TRANSFER LEARNING INTEGRATION\n")
+cat("MODULE 05c: TRANSFER LEARNING\n")
 cat("========================================\n\n")
 
-CONFIG <- list(
-  # Input files
-  local_cores = "data_processed/cores_harmonized_bluecarbon.csv",
-  global_cores = "data_processed/global_cores_harmonized_VM0033.csv",
-  global_features = "data_global/cores_with_bluecarbon_global_maps.csv",
-
-  # Output directories
-  output_models = "outputs/models/rf",
-  output_predictions = "outputs/predictions/rf",
-  output_diagnostics = "diagnostics/transfer_learning",
-
-  # Model settings
-  target_depths = c(7.5, 22.5, 40, 75),  # VM0033 standard depths
-  n_trees = 500,
-  cv_folds = 10,
-
-  # Create directories
-  create_dirs = TRUE
-)
-
 # Create output directories
-if (CONFIG$create_dirs) {
-  dir.create(CONFIG$output_models, recursive = TRUE, showWarnings = FALSE)
-  dir.create(CONFIG$output_predictions, recursive = TRUE, showWarnings = FALSE)
-  dir.create(CONFIG$output_diagnostics, recursive = TRUE, showWarnings = FALSE)
+dir.create("outputs/models/transfer_learning", recursive = TRUE, showWarnings = FALSE)
+dir.create("diagnostics/transfer_learning", recursive = TRUE, showWarnings = FALSE)
+
+# ============================================================================
+# STEP 1: LOAD HARMONIZED DATA
+# ============================================================================
+
+cat("STEP 1: Loading harmonized datasets...\n\n")
+
+# Load local cores (harmonized by Module 03)
+if (!file.exists("data_processed/cores_harmonized_bluecarbon.csv")) {
+  stop("Local harmonized cores not found!\n",
+       "Run Module 03 first: Rscript 03_depth_harmonization_bluecarbon.R")
+}
+
+local_cores <- read_csv("data_processed/cores_harmonized_bluecarbon.csv",
+                        show_col_types = FALSE)
+cat(sprintf("✓ Local cores: %d samples from %d cores\n",
+            nrow(local_cores), n_distinct(local_cores$core_id)))
+
+# Load global cores (harmonized by Module 03)
+use_global <- FALSE
+if (file.exists("data_processed/global_cores_harmonized_VM0033.csv")) {
+  global_cores <- read_csv("data_processed/global_cores_harmonized_VM0033.csv",
+                          show_col_types = FALSE)
+  cat(sprintf("✓ Global cores: %d samples from %d cores\n",
+              nrow(global_cores), n_distinct(global_cores$core_id)))
+  use_global <- TRUE
+} else {
+  cat("  (No global dataset found - using local only)\n")
 }
 
 # ============================================================================
-# STEP 1: LOAD AND MERGE DATA
+# STEP 2: COMBINE DATASETS
 # ============================================================================
 
-cat("=== STEP 1: Load and Merge Data ===\n\n")
+cat("\nSTEP 2: Combining datasets...\n\n")
 
-# Load local field cores
-if (!file.exists(CONFIG$local_cores)) {
-  cat("ERROR: Local cores file not found!\n")
-  cat("Expected:", CONFIG$local_cores, "\n")
-  cat("Please run Module 03 (depth harmonization) first.\n\n")
-  quit(save = "no", status = 1)
-}
-
-local_cores <- read_csv(CONFIG$local_cores, show_col_types = FALSE)
-cat(sprintf("✓ Loaded %d local cores (harmonized)\n", nrow(local_cores)))
-cat(sprintf("  Depths: %d samples at VM0033 standard depths\n",
-            sum(local_cores$depth_cm_midpoint %in% c(7.5, 22.5, 40, 75))))
-
-# Load global harmonized cores (if available)
-if (file.exists(CONFIG$global_cores)) {
-  global_cores <- read_csv(CONFIG$global_cores, show_col_types = FALSE)
-  cat(sprintf("\n✓ Loaded %d global cores (harmonized)\n", nrow(global_cores)))
-  cat(sprintf("  Global dataset: %d unique cores\n", n_distinct(global_cores$core_id)))
-  cat(sprintf("  Depths: %d samples at VM0033 standard depths\n",
-              sum(global_cores$depth_cm_midpoint %in% c(7.5, 22.5, 40, 75))))
-
+if (use_global) {
   # Add source identifier
-  local_cores <- local_cores %>% mutate(data_source = "local")
-  global_cores <- global_cores %>% mutate(data_source = "global")
+  local_cores$data_source <- "local"
+  global_cores$data_source <- "global"
 
-  # Combine local and global datasets
-  cat("\nCombining local and global cores...\n")
+  # Required columns for modeling
+  required <- c("core_id", "depth_cm_midpoint", "carbon_stock_kg_m2")
+
+  if (!all(required %in% names(local_cores))) {
+    stop("Local cores missing required columns: ",
+         paste(setdiff(required, names(local_cores)), collapse = ", "))
+  }
+
+  if (!all(required %in% names(global_cores))) {
+    stop("Global cores missing required columns: ",
+         paste(setdiff(required, names(global_cores)), collapse = ", "))
+  }
 
   # Find common columns
   common_cols <- intersect(names(local_cores), names(global_cores))
-  required_cols <- c("core_id", "depth_cm_midpoint", "soc_harmonized", "bd_harmonized", "carbon_stock_kg_m2")
 
-  if (all(required_cols %in% common_cols)) {
-    # Merge on common columns
-    combined_cores <- bind_rows(
-      local_cores %>% select(any_of(common_cols)),
-      global_cores %>% select(any_of(common_cols))
-    )
+  # Combine on common columns
+  combined_data <- bind_rows(
+    local_cores %>% select(all_of(common_cols)),
+    global_cores %>% select(all_of(common_cols))
+  )
 
-    cat(sprintf("✓ Combined dataset: %d total samples from %d cores\n",
-                nrow(combined_cores), n_distinct(combined_cores$core_id)))
-    cat(sprintf("  Local: %d samples\n", sum(combined_cores$data_source == "local")))
-    cat(sprintf("  Global: %d samples\n", sum(combined_cores$data_source == "global")))
-
-    # Use combined dataset
-    local_cores <- combined_cores
-
-  } else {
-    missing <- setdiff(required_cols, common_cols)
-    cat(sprintf("\nWARNING: Cannot combine datasets - missing columns: %s\n",
-                paste(missing, collapse = ", ")))
-    cat("Using local cores only.\n")
-  }
+  cat(sprintf("✓ Combined: %d total samples\n", nrow(combined_data)))
+  cat(sprintf("  - Local: %d samples\n", sum(combined_data$data_source == "local")))
+  cat(sprintf("  - Global: %d samples\n", sum(combined_data$data_source == "global")))
 
 } else {
-  cat("\nNo global harmonized cores found.\n")
-  cat("  Expected:", CONFIG$global_cores, "\n")
-  cat("  Continuing with local cores only.\n")
-  cat("  (Run Module 03 to harmonize global dataset)\n\n")
-}
-
-# Load global features
-if (!file.exists(CONFIG$global_features)) {
-  cat("\nWARNING: Global features file not found!\n")
-  cat("Expected:", CONFIG$global_features, "\n")
-  cat("\nYou need to:\n")
-  cat("1. Run GEE_EXTRACT_BLUECARBON_GLOBAL_MAPS.js\n")
-  cat("2. Download CSV from Google Drive\n")
-  cat("3. Place in data_global/ folder\n\n")
-  cat("CONTINUING WITHOUT TRANSFER LEARNING (local features only)\n\n")
-
-  cores_merged <- local_cores
-  use_transfer_learning <- FALSE
-
-} else {
-
-  global_features <- read_csv(CONFIG$global_features, show_col_types = FALSE)
-  cat(sprintf("✓ Loaded global features for %d cores\n", nrow(global_features)))
-
-  # Detect ID column in global features
-  # GEE exports may have different column names
-  possible_id_cols <- c("core_id", "sample_id", "system:index", ".geo")
-
-  id_col_global <- NULL
-  for (col in possible_id_cols) {
-    if (col %in% names(global_features)) {
-      id_col_global <- col
-      break
-    }
-  }
-
-  if (is.null(id_col_global)) {
-    # Use first column as ID
-    id_col_global <- names(global_features)[1]
-    cat(sprintf("WARNING: No standard ID column found in global features.\n"))
-    cat(sprintf("Using first column as ID: '%s'\n", id_col_global))
-  } else {
-    cat(sprintf("✓ Detected ID column in global features: '%s'\n", id_col_global))
-  }
-
-  # Detect ID column in local cores
-  id_col_local <- NULL
-  if ("core_id" %in% names(local_cores)) {
-    id_col_local <- "core_id"
-  } else if ("sample_id" %in% names(local_cores)) {
-    id_col_local <- "sample_id"
-  } else {
-    id_col_local <- names(local_cores)[1]
-  }
-
-  cat(sprintf("✓ Using ID column in local cores: '%s'\n", id_col_local))
-
-  # Standardize ID column names for merge
-  if (id_col_global != id_col_local) {
-    cat(sprintf("Renaming '%s' to '%s' in global features for merge\n",
-                id_col_global, id_col_local))
-    global_features <- global_features %>%
-      rename(!!id_col_local := !!id_col_global)
-  }
-
-  # Convert ID column types to match
-  # This handles cases where GEE exports numeric IDs but local data has character IDs
-  if (is.character(local_cores[[id_col_local]]) && is.numeric(global_features[[id_col_local]])) {
-    cat("Converting numeric global IDs to character to match local IDs\n")
-    global_features <- global_features %>%
-      mutate(!!id_col_local := as.character(.data[[id_col_local]]))
-  } else if (is.numeric(local_cores[[id_col_local]]) && is.character(global_features[[id_col_local]])) {
-    cat("Converting character global IDs to numeric to match local IDs\n")
-    global_features <- global_features %>%
-      mutate(!!id_col_local := as.numeric(.data[[id_col_local]]))
-  }
-
-  # Remove .geo column if it exists (GEE artifact)
-  if (".geo" %in% names(global_features)) {
-    global_features <- global_features %>%
-      select(-.geo)
-  }
-
-  # Show first few IDs for verification
-  cat("\nFirst 3 IDs in local cores:",
-      paste(head(local_cores[[id_col_local]], 3), collapse = ", "), "\n")
-  cat("First 3 IDs in global features:",
-      paste(head(global_features[[id_col_local]], 3), collapse = ", "), "\n\n")
-
-  # Merge
-  cores_merged <- local_cores %>%
-    left_join(global_features, by = id_col_local)
-
-  # Check merge success
-  n_missing_global <- sum(is.na(cores_merged$murray_tidal_flag))
-
-  if (n_missing_global > 0) {
-    cat(sprintf("WARNING: %d cores missing global features\n", n_missing_global))
-  }
-
-  cat(sprintf("✓ Merged: %d cores with %d total columns\n",
-              nrow(cores_merged), ncol(cores_merged)))
-
-  # Count global features
-  global_feature_cols <- names(cores_merged)[
-    grepl("^murray_|^gsw_|^wc_|^topo_|^sg_", names(cores_merged))
-  ]
-
-  cat(sprintf("✓ Global features added: %d\n", length(global_feature_cols)))
-  cat("  Global features:", paste(head(global_feature_cols, 5), collapse = ", "), "...\n")
-
-  use_transfer_learning <- TRUE
+  combined_data <- local_cores
+  cat("✓ Using local data only\n")
 }
 
 # ============================================================================
-# STEP 1b: EXTRACT LOCAL COVARIATES FROM RASTERS
+# STEP 3: EXTRACT LOCAL COVARIATES (Optional)
 # ============================================================================
 
-cat("\n=== STEP 1b: Extract Local Covariates ===\n\n")
+cat("\nSTEP 3: Checking for local covariates...\n\n")
 
-# Search for covariates in multiple possible locations
-covariate_paths <- c(
-  "covariates",
-  "data_processed/covariates",
-  "outputs/covariates",
-  "data_raw/covariates",
-  "."  # Also check root directory
-)
+# Check if covariates folder exists
+if (dir.exists("covariates")) {
 
-covariate_dir <- NULL
-for (path in covariate_paths) {
-  if (dir.exists(path)) {
-    # Check if this directory actually has .tif files
-    test_files <- list.files(path,
-                            pattern = "\\.(tif|tiff|TIF|TIFF)$",
-                            full.names = FALSE,
-                            recursive = TRUE,
-                            ignore.case = TRUE)
-    if (length(test_files) > 0) {
-      covariate_dir <- path
-      cat(sprintf("✓ Found covariates folder: %s\n", path))
-      break
-    }
-  }
-}
-
-if (is.null(covariate_dir)) {
-  cat("WARNING: No covariates folder with .tif files found!\n")
-  cat("Searched locations:\n")
-  cat(paste("  -", covariate_paths, collapse = "\n"), "\n\n")
-  cat("Checking if covariates are already in the cores CSV...\n\n")
-
-  # Check if already in CSV
-  if (!any(grepl("NDVI|ndvi|elevation|elev", names(cores_merged), ignore.case = TRUE))) {
-    cat("ERROR: No covariates folder and covariates not in CSV.\n")
-    cat("\nPlease either:\n")
-    cat("1. Create ./covariates/ folder and add GEE covariate exports (.tif files)\n")
-    cat("2. Or provide the full path to your covariates folder\n")
-    cat("3. Or run a module that extracts covariates to your cores CSV first\n\n")
-    quit(save = "no", status = 1)
-  }
-
-  cat("✓ Covariates found in CSV, skipping extraction\n")
-
-} else {
-
-  # Find ALL .tif files (case insensitive, any subdirectory, any extension variant)
-  covariate_files <- list.files(covariate_dir,
-                                pattern = "\\.(tif|tiff|TIF|TIFF)$",
-                                full.names = TRUE,
-                                recursive = TRUE,
+  covariate_files <- list.files("covariates", pattern = "\\.tif$",
+                                full.names = TRUE, recursive = TRUE,
                                 ignore.case = TRUE)
 
-  cat(sprintf("\n✓ Found %d covariate files:\n", length(covariate_files)))
-  for (i in 1:min(15, length(covariate_files))) {
-    cat(sprintf("  %d. %s\n", i, basename(covariate_files[i])))
-  }
-  if (length(covariate_files) > 15) {
-    cat(sprintf("  ... and %d more\n", length(covariate_files) - 15))
-  }
+  if (length(covariate_files) > 0) {
 
-  # Load raster stack
-  cat("\nLoading rasters into stack...\n")
-  covariate_stack <- rast(covariate_files)
-  cat(sprintf("✓ Loaded %d covariate layers\n", nlyr(covariate_stack)))
+    cat(sprintf("✓ Found %d covariate rasters\n", length(covariate_files)))
 
-  # Clean layer names (remove path and any extension variant)
-  clean_names <- gsub("\\.(tif|tiff|TIF|TIFF)$", "", basename(covariate_files))
-  names(covariate_stack) <- clean_names
+    # Load raster stack
+    covariate_stack <- rast(covariate_files)
+    names(covariate_stack) <- gsub("\\.(tif|tiff)$", "", basename(covariate_files))
 
-  cat("\nCovariate layer names after loading:\n")
-  for (i in 1:min(15, length(clean_names))) {
-    cat(sprintf("  %s\n", clean_names[i]))
-  }
-  if (length(clean_names) > 15) {
-    cat(sprintf("  ... and %d more\n", length(clean_names) - 15))
-  }
+    cat("  Covariates:", paste(names(covariate_stack), collapse = ", "), "\n\n")
 
-  # Create spatial points from cores
-  if (!all(c("longitude", "latitude") %in% names(cores_merged))) {
-    cat("ERROR: Cores CSV must have 'longitude' and 'latitude' columns\n\n")
-    quit(save = "no", status = 1)
-  }
+    # Extract for cores with lat/lon
+    if (all(c("latitude", "longitude") %in% names(combined_data))) {
 
-  cores_sf <- cores_merged %>%
-    filter(!is.na(longitude), !is.na(latitude)) %>%
-    st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
+      cores_with_coords <- combined_data %>%
+        filter(!is.na(latitude), !is.na(longitude))
 
-  # Transform to match covariate CRS
-  cores_sf <- st_transform(cores_sf, crs = crs(covariate_stack))
+      cores_sf <- st_as_sf(cores_with_coords,
+                          coords = c("longitude", "latitude"),
+                          crs = 4326)
+      cores_sf <- st_transform(cores_sf, crs = crs(covariate_stack))
 
-  cat(sprintf("✓ Extracting covariates at %d core locations...\n", nrow(cores_sf)))
+      # Extract values
+      covariate_values <- terra::extract(covariate_stack, cores_sf, ID = FALSE)
 
-  # Extract covariate values
-  covariate_values <- terra::extract(covariate_stack, cores_sf, ID = FALSE)
+      # Add to data
+      combined_data <- bind_cols(cores_with_coords, covariate_values)
 
-  # Add to cores_merged
-  cores_merged <- bind_cols(cores_merged, covariate_values)
+      cat(sprintf("✓ Extracted %d covariates at core locations\n",
+                  ncol(covariate_values)))
 
-  cat(sprintf("✓ Added %d covariate columns to cores\n", ncol(covariate_values)))
-}
-
-# ============================================================================
-# STEP 2: PREPARE TRAINING DATA
-# ============================================================================
-
-cat("\n=== STEP 2: Prepare Training Data ===\n\n")
-
-# Show all available columns
-cat("Available columns in merged dataset:\n")
-all_cols <- names(cores_merged)
-
-# Define core/metadata columns (exclude from covariates)
-core_cols <- c("core_id", "sample_id", "latitude", "longitude", "ecosystem", "site", "stratum",
-               "depth_cm_midpoint", "carbon_stock_kg_m2", "soc_harmonized", "bd_harmonized",
-               "data_source", "qa_pass", "qa_realistic")
-
-# Find global transfer learning features
-global_cols <- grep("^murray_|^gsw_|^wc_|^topo_|^sg_", all_cols, value = TRUE)
-
-# Covariates are everything else (excluding core metadata and global features)
-covariate_cols <- setdiff(setdiff(all_cols, core_cols), global_cols)
-
-cat(sprintf("\n  Core metadata columns (%d):\n", length(core_cols)))
-cat(paste("    ", head(intersect(core_cols, all_cols), 10), collapse = "\n"), "\n")
-
-cat(sprintf("\n  Local covariates (%d):\n", length(covariate_cols)))
-if (length(covariate_cols) > 0) {
-  cat(paste("    ", head(covariate_cols, 20), collapse = "\n"), "\n")
-  if (length(covariate_cols) > 20) {
-    cat(sprintf("    ... and %d more\n", length(covariate_cols) - 20))
+    } else {
+      cat("  (No latitude/longitude - skipping extraction)\n")
+    }
+  } else {
+    cat("  (No .tif files found)\n")
   }
 } else {
-  cat("    (none found)\n")
+  cat("  (No covariates folder found)\n")
 }
 
-if (use_transfer_learning && length(global_cols) > 0) {
-  cat(sprintf("\n  Global features (%d):\n", length(global_cols)))
-  cat(paste("    ", head(global_cols, 10), collapse = "\n"), "\n")
-  if (length(global_cols) > 10) {
-    cat(sprintf("    ... and %d more\n", length(global_cols) - 10))
-  }
+# ============================================================================
+# STEP 4: PREPARE FOR MODELING
+# ============================================================================
+
+cat("\nSTEP 4: Preparing for modeling...\n\n")
+
+# Check required columns
+if (!"depth_cm_midpoint" %in% names(combined_data)) {
+  stop("Missing depth_cm_midpoint column!")
 }
 
-# Check if we have at least SOME covariates to work with
-if (length(covariate_cols) == 0 && length(global_cols) == 0) {
-  cat("\nERROR: No covariate columns found!\n")
-  cat("Cannot train models without predictors.\n\n")
+if (!"carbon_stock_kg_m2" %in% names(combined_data)) {
+  stop("Missing carbon_stock_kg_m2 column!")
+}
+
+# Identify predictor columns
+exclude_cols <- c("core_id", "sample_id", "latitude", "longitude", "ecosystem",
+                 "site", "stratum", "depth_cm_midpoint", "carbon_stock_kg_m2",
+                 "soc_harmonized", "bd_harmonized", "data_source",
+                 "qa_pass", "qa_realistic", "qa_monotonic")
+
+# Find numeric predictors
+all_cols <- names(combined_data)
+predictor_cols <- setdiff(all_cols, exclude_cols)
+predictor_cols <- predictor_cols[sapply(combined_data[predictor_cols], is.numeric)]
+
+if (length(predictor_cols) == 0) {
+  cat("\nWARNING: No predictor variables found!\n")
+  cat("Available columns:\n")
+  print(names(combined_data))
+  cat("\nCannot train models without predictors.\n")
+  cat("Please add covariate rasters to ./covariates/ folder\n\n")
   quit(save = "no", status = 1)
 }
 
-# Identify available standard covariates
-preferred_local <- c("NDVI_median_annual", "EVI_median_growing", "NDMI_median_annual",
-                    "VV_median", "VH_median", "elevation_m", "slope_degrees")
-available_local <- intersect(preferred_local, covariate_cols)
-
-# If preferred names not found, use ANY numeric covariates
-if (length(available_local) == 0) {
-  cat("\nNOTE: Standard covariate names not found. Using all available numeric columns.\n")
-  # Find numeric columns (excluding ID, target, and harmonized variables)
-  exclude_cols <- c(core_cols, global_cols)
-  numeric_cols <- sapply(cores_merged, is.numeric)
-  available_local <- names(cores_merged)[numeric_cols & !names(cores_merged) %in% exclude_cols]
-}
-
-cat(sprintf("\n✓ Using %d local covariates for modeling:\n", length(available_local)))
-cat(paste("  ", available_local, collapse = "\n"), "\n")
-
-# Build dynamic model formulas based on available columns
-# Local-only model (baseline)
-if (length(available_local) > 0) {
-  formula_local <- as.formula(
-    paste("carbon_stock_kg_m2 ~", paste(available_local, collapse = " + "))
-  )
-  cat(sprintf("\n✓ Local-only model formula created with %d covariates\n", length(available_local)))
-} else {
-  cat("\nWARNING: No local covariates available! Cannot train local-only model.\n")
-  formula_local <- NULL
-}
-
-# Transfer learning model (local + global)
-if (use_transfer_learning && length(global_cols) > 0) {
-  # Combine local and global features
-  all_predictors <- c(available_local, global_cols)
-
-  formula_transfer <- as.formula(
-    paste("carbon_stock_kg_m2 ~", paste(all_predictors, collapse = " + "))
-  )
-
-  cat(sprintf("✓ Transfer learning model formula created\n"))
-  cat(sprintf("    Local covariates: %d\n", length(available_local)))
-  cat(sprintf("    Global features: %d\n", length(global_cols)))
-  cat(sprintf("    Total predictors: %d\n", length(all_predictors)))
-
-} else {
-  formula_transfer <- NULL
-  if (use_transfer_learning) {
-    cat("\nNOTE: Transfer learning disabled - no global features available\n")
-  }
+cat(sprintf("✓ Found %d predictor variables:\n", length(predictor_cols)))
+for (pred in predictor_cols) {
+  cat(sprintf("  - %s\n", pred))
 }
 
 # ============================================================================
-# STEP 3: TRAIN MODELS BY DEPTH
+# STEP 5: TRAIN MODELS BY DEPTH
 # ============================================================================
 
-cat("\n=== STEP 3: Train Models by Depth ===\n\n")
+cat("\nSTEP 5: Training models by depth...\n\n")
 
-# Both datasets are now harmonized - check for required columns
-required_harmonized_cols <- c("depth_cm_midpoint", "carbon_stock_kg_m2")
-missing_harmonized <- setdiff(required_harmonized_cols, names(cores_merged))
+# VM0033 standard depths
+vm0033_depths <- c(7.5, 22.5, 40, 75)
 
-if (length(missing_harmonized) > 0) {
-  cat("ERROR: Missing harmonized columns!\n")
-  cat(sprintf("  Missing: %s\n", paste(missing_harmonized, collapse = ", ")))
-  cat("\nAvailable columns:\n")
-  cat(paste("  ", names(cores_merged), collapse = "\n"), "\n\n")
-  cat("SOLUTION: Run Module 03 (depth harmonization) first:\n")
-  cat("  Rscript 03_depth_harmonization_bluecarbon.R\n\n")
-  quit(save = "no", status = 1)
-}
-
-cat("✓ Using harmonized columns: depth_cm_midpoint, carbon_stock_kg_m2\n")
-cat(sprintf("✓ Training dataset: %d samples with complete data\n",
-            sum(!is.na(cores_merged$depth_cm_midpoint) & !is.na(cores_merged$carbon_stock_kg_m2))))
-
+# Store results
 results <- list()
 
-for (depth_cm in CONFIG$target_depths) {
+for (target_depth in vm0033_depths) {
 
-  cat(sprintf("\n--- Training models for depth: %g cm ---\n", depth_cm))
+  cat(sprintf("\n--- Depth: %g cm ---\n", target_depth))
 
-  # Filter to depth (using harmonized depth_cm_midpoint)
-  data_depth <- cores_merged %>%
-    filter(abs(depth_cm_midpoint - depth_cm) < 5) %>%
-    drop_na(carbon_stock_kg_m2)
+  # Filter to this depth (±5 cm tolerance)
+  data_depth <- combined_data %>%
+    filter(abs(depth_cm_midpoint - target_depth) < 5,
+           !is.na(carbon_stock_kg_m2)) %>%
+    drop_na(all_of(predictor_cols))  # Remove NA predictors
 
-  cat(sprintf("  Samples at this depth: %d\n", nrow(data_depth)))
+  n_samples <- nrow(data_depth)
+  cat(sprintf("  Samples: %d\n", n_samples))
 
-  if (nrow(data_depth) < 10) {
-    cat("  SKIPPING: Insufficient samples (< 10)\n")
+  if (n_samples < 10) {
+    cat("  SKIP: Not enough samples (< 10)\n")
     next
   }
 
-  # Train local-only model
-  cat("  Training local-only RF...\n")
+  # Split by data source if global data available
+  if (use_global && "data_source" %in% names(data_depth)) {
+    n_local <- sum(data_depth$data_source == "local")
+    n_global <- sum(data_depth$data_source == "global")
+    cat(sprintf("  - Local: %d\n", n_local))
+    cat(sprintf("  - Global: %d\n", n_global))
+  }
 
-  rf_local <- ranger(
-    formula_local,
+  # Build formula
+  formula_str <- paste("carbon_stock_kg_m2 ~", paste(predictor_cols, collapse = " + "))
+  formula_rf <- as.formula(formula_str)
+
+  # Train Random Forest
+  cat("  Training Random Forest...\n")
+
+  rf_model <- ranger(
+    formula_rf,
     data = data_depth,
+    num.trees = 500,
     importance = "permutation",
-    num.trees = CONFIG$n_trees,
-    mtry = 3,
-    oob.error = TRUE
+    oob.error = TRUE,
+    seed = 42
   )
 
-  # Train transfer learning model (if available)
-  if (use_transfer_learning) {
-    cat("  Training transfer learning RF...\n")
+  # Get performance metrics
+  r2 <- rf_model$r.squared
+  rmse <- sqrt(rf_model$prediction.error)
 
-    rf_transfer <- ranger(
-      formula_transfer,
-      data = data_depth,
-      importance = "permutation",
-      num.trees = CONFIG$n_trees,
-      mtry = 5,  # More features
-      oob.error = TRUE
-    )
-  }
+  cat(sprintf("  ✓ R² = %.3f, RMSE = %.2f kg/m²\n", r2, rmse))
 
-  # Compare performance
-  cat("\n  --- Performance Comparison ---\n")
+  # Store results
+  results[[as.character(target_depth)]] <- list(
+    depth_cm = target_depth,
+    n_samples = n_samples,
+    n_predictors = length(predictor_cols),
+    r_squared = r2,
+    rmse = rmse,
+    model = rf_model
+  )
 
-  rmse_local <- sqrt(rf_local$prediction.error)
-  r2_local <- rf_local$r.squared
-
-  cat(sprintf("  Local only:  RMSE = %.2f kg/m²,  R² = %.3f\n",
-              rmse_local, r2_local))
-
-  if (use_transfer_learning) {
-    rmse_transfer <- sqrt(rf_transfer$prediction.error)
-    r2_transfer <- rf_transfer$r.squared
-
-    improvement_rmse <- (rmse_local - rmse_transfer) / rmse_local * 100
-    improvement_r2 <- r2_transfer - r2_local
-
-    cat(sprintf("  Transfer:    RMSE = %.2f kg/m²,  R² = %.3f\n",
-                rmse_transfer, r2_transfer))
-    cat(sprintf("  Improvement: %.1f%% RMSE reduction, +%.3f R²\n",
-                improvement_rmse, improvement_r2))
-
-    # Save both models
-    saveRDS(rf_transfer,
-            file.path(CONFIG$output_models,
-                     sprintf("rf_transfer_%gcm.rds", depth_cm)))
-
-    # Store results
-    results[[as.character(depth_cm)]] <- list(
-      depth = depth_cm,
-      n_samples = nrow(data_depth),
-      rf_local = rf_local,
-      rf_transfer = rf_transfer,
-      improvement_pct = improvement_rmse,
-      improvement_r2 = improvement_r2
-    )
-
-  } else {
-    # Only local model
-    results[[as.character(depth_cm)]] <- list(
-      depth = depth_cm,
-      n_samples = nrow(data_depth),
-      rf_local = rf_local
-    )
-  }
-
-  # Save local model
-  saveRDS(rf_local,
-          file.path(CONFIG$output_models,
-                   sprintf("rf_local_%gcm.rds", depth_cm)))
-
-  cat(sprintf("  ✓ Models saved for %g cm\n", depth_cm))
+  # Save model
+  model_file <- sprintf("outputs/models/transfer_learning/rf_depth_%g_cm.rds",
+                       target_depth)
+  saveRDS(rf_model, model_file)
+  cat(sprintf("  Saved: %s\n", basename(model_file)))
 }
 
 # ============================================================================
-# STEP 4: SUMMARIZE RESULTS
-# ============================================================================
-
-cat("\n=== STEP 4: Transfer Learning Summary ===\n\n")
-
-if (use_transfer_learning) {
-
-  # Create summary table
-  summary_df <- bind_rows(lapply(results, function(r) {
-    data.frame(
-      depth_cm = r$depth,
-      n_samples = r$n_samples,
-      rmse_local = sqrt(r$rf_local$prediction.error),
-      r2_local = r$rf_local$r.squared,
-      rmse_transfer = sqrt(r$rf_transfer$prediction.error),
-      r2_transfer = r$rf_transfer$r.squared,
-      improvement_pct = r$improvement_pct,
-      improvement_r2 = r$improvement_r2
-    )
-  }))
-
-  print(summary_df)
-
-  # Save summary
-  write_csv(summary_df,
-            file.path(CONFIG$output_diagnostics, "transfer_learning_summary.csv"))
-
-  # Overall statistics
-  cat("\n--- Overall Transfer Learning Benefit ---\n")
-  cat(sprintf("Mean RMSE reduction: %.1f%%\n", mean(summary_df$improvement_pct)))
-  cat(sprintf("Mean R² improvement: +%.3f\n", mean(summary_df$improvement_r2)))
-
-  # Feature importance comparison
-  cat("\n--- Top 5 Features (Transfer Learning Model at 7.5 cm) ---\n")
-
-  if ("7.5" %in% names(results)) {
-    imp <- results[["7.5"]]$rf_transfer$variable.importance
-    imp_sorted <- sort(imp, decreasing = TRUE)
-
-    for (i in 1:min(5, length(imp_sorted))) {
-      feat_name <- names(imp_sorted)[i]
-      feat_imp <- imp_sorted[i]
-      is_global <- grepl("^murray_|^gsw_|^wc_|^topo_|^sg_", feat_name)
-
-      cat(sprintf("%d. %-30s %.3f %s\n",
-                  i, feat_name, feat_imp,
-                  ifelse(is_global, "[GLOBAL]", "[LOCAL]")))
-    }
-  }
-
-} else {
-  cat("Transfer learning models not trained (missing global features)\n")
-  cat("Trained local-only models for comparison later.\n")
-}
-
-# ============================================================================
-# STEP 5: NEXT STEPS
+# STEP 6: SUMMARIZE PERFORMANCE
 # ============================================================================
 
 cat("\n========================================\n")
-cat("TRANSFER LEARNING INTEGRATION COMPLETE\n")
+cat("PERFORMANCE SUMMARY\n")
 cat("========================================\n\n")
 
-cat("✓ Models trained for", length(results), "depths\n")
+# Create summary table
+summary_df <- map_df(results, function(res) {
+  tibble(
+    depth_cm = res$depth_cm,
+    n_samples = res$n_samples,
+    n_predictors = res$n_predictors,
+    r_squared = res$r_squared,
+    rmse_kg_m2 = res$rmse
+  )
+})
 
-if (use_transfer_learning) {
-  cat("✓ Transfer learning models show improvement!\n")
-  cat(sprintf("  Average improvement: %.1f%% RMSE reduction\n",
-              mean(summary_df$improvement_pct)))
-}
+print(summary_df)
 
-cat("\n📋 NEXT STEPS:\n\n")
+# Save summary
+write_csv(summary_df, "diagnostics/transfer_learning/performance_summary.csv")
+saveRDS(results, "diagnostics/transfer_learning/model_results.rds")
 
-if (!use_transfer_learning) {
-  cat("⚠️  To enable transfer learning:\n")
-  cat("   1. Run GEE_EXTRACT_BLUECARBON_GLOBAL_MAPS.js\n")
-  cat("   2. Download CSV to data_global/\n")
-  cat("   3. Re-run this module\n\n")
-}
+cat("\n✓ Transfer learning complete!\n")
+cat("\nOutputs:\n")
+cat("  - Models: outputs/models/transfer_learning/\n")
+cat("  - Summary: diagnostics/transfer_learning/performance_summary.csv\n\n")
 
-cat("1. Make spatial predictions:\n")
-cat("   → Update prediction script to use transfer learning models\n")
-cat("   → Compare predicted maps: local vs transfer learning\n\n")
-
-cat("2. Validate against independent test set:\n")
-cat("   → Calculate MAE, RMSE, R² on holdout cores\n")
-cat("   → Quantify improvement for MMRV reporting\n\n")
-
-cat("3. Document for carbon project:\n")
-cat("   → Report: 'Transfer learning improved predictions by X%'\n")
-cat("   → Cite global products used (Murray, GSW, WorldClim)\n")
-cat("   → Show before/after uncertainty maps\n\n")
-
-cat("💡 TIP: Your RF models are saved in:\n")
-cat("   ", CONFIG$output_models, "\n")
-cat("   Load with: model <- readRDS('outputs/models/rf/rf_transfer_7.5cm.rds')\n\n")
-
-if (use_transfer_learning) {
-  cat("🎉 Transfer learning successfully integrated!\n")
-  cat("   Global knowledge + Local precision = Better predictions\n\n")
-}
-
-cat("Done! 🌊\n\n")
+cat("Next steps:\n")
+cat("  1. Review model performance by depth\n")
+cat("  2. Check variable importance plots\n")
+cat("  3. Make spatial predictions with best model\n\n")
