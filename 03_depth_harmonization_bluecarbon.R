@@ -1289,13 +1289,94 @@ if (length(global_data_files) > 0) {
 
   log_message(sprintf("Loaded %d rows from global dataset", nrow(global_cores_raw)))
 
+  # Standardize column names to lowercase for consistent matching
+  names(global_cores_raw) <- tolower(names(global_cores_raw))
+
   # Check if this dataset needs harmonization
   # Look for depth and carbon columns
   has_depth <- any(grepl("depth", names(global_cores_raw), ignore.case = TRUE))
   has_carbon <- any(grepl("carbon|soc", names(global_cores_raw), ignore.case = TRUE))
   has_bd <- any(grepl("bulk.*density|bd_g", names(global_cores_raw), ignore.case = TRUE))
 
-  if (has_depth && has_carbon && has_bd) {
+  # Check for pre-calculated carbon stock columns (Janousek format)
+  has_carbon_stock <- any(grepl("carbon_stock", names(global_cores_raw), ignore.case = TRUE))
+
+  if (has_carbon_stock && all(c("latitude", "longitude") %in% names(global_cores_raw))) {
+
+    log_message("Global dataset has pre-calculated carbon stocks - converting to VM0033 format...")
+
+    # This is Janousek-style data with cumulative carbon stocks
+    # Columns: carbon_stock_30cm, carbon_stock_50cm, carbon_stock_100cm
+    # Convert to VM0033 layers: 0-15cm, 15-30cm, 30-50cm, 50-100cm
+
+    global_harmonized_list <- list()
+
+    for (i in 1:nrow(global_cores_raw)) {
+      row <- global_cores_raw[i, ]
+
+      # Get cumulative stocks
+      stock_30 <- as.numeric(row$carbon_stock_30cm)
+      stock_50 <- as.numeric(row$carbon_stock_50cm)
+      stock_100 <- as.numeric(row$carbon_stock_100cm)
+
+      # Skip if all NAs
+      if (all(is.na(c(stock_30, stock_50, stock_100)))) next
+
+      # Calculate layer stocks
+      # Layer 1 (0-15 cm, midpoint 7.5): half of 0-30cm
+      # Layer 2 (15-30 cm, midpoint 22.5): other half of 0-30cm
+      # Layer 3 (30-50 cm, midpoint 40): 30-50cm
+      # Layer 4 (50-100 cm, midpoint 75): 50-100cm
+
+      layer_stocks <- c(
+        ifelse(!is.na(stock_30), stock_30 / 2, NA),  # 0-15 cm
+        ifelse(!is.na(stock_30), stock_30 / 2, NA),  # 15-30 cm
+        ifelse(!is.na(stock_50) && !is.na(stock_30), stock_50 - stock_30, NA),  # 30-50 cm
+        ifelse(!is.na(stock_100) && !is.na(stock_50), stock_100 - stock_50, NA)  # 50-100 cm
+      )
+
+      # Create harmonized data frame
+      core_id <- ifelse("sampid" %in% names(row), as.character(row$sampid),
+                       ifelse("studyid" %in% names(row),
+                              paste0("GLOBAL_", row$studyid, "_", i),
+                              paste0("GLOBAL_", i)))
+
+      global_harmonized_list[[i]] <- data.frame(
+        core_id = core_id,
+        depth_cm_midpoint = VM0033_DEPTH_MIDPOINTS,
+        carbon_stock_kg_m2 = layer_stocks,
+        latitude = as.numeric(row$latitude),
+        longitude = as.numeric(row$longitude),
+        ecosystem = ifelse("ecosystem" %in% names(row), as.character(row$ecosystem), NA),
+        stringsAsFactors = FALSE
+      )
+    }
+
+    if (length(global_harmonized_list) > 0) {
+      global_harmonized <- bind_rows(global_harmonized_list)
+
+      # Add duplicate depth column for backward compatibility
+      global_harmonized$depth_cm <- global_harmonized$depth_cm_midpoint
+
+      # Remove rows with NA carbon stock
+      global_harmonized <- global_harmonized %>%
+        filter(!is.na(carbon_stock_kg_m2))
+
+      log_message(sprintf("✓ Converted %d samples from %d cores to VM0033 format",
+                         nrow(global_harmonized),
+                         length(unique(global_harmonized$core_id))))
+
+      # Save harmonized global data
+      dir.create("data_processed", showWarnings = FALSE, recursive = TRUE)
+      saveRDS(global_harmonized, "data_processed/global_cores_harmonized_VM0033.rds")
+      write.csv(global_harmonized, "data_processed/global_cores_harmonized_VM0033.csv",
+               row.names = FALSE)
+
+      log_message(sprintf("✓ Saved to data_processed/global_cores_harmonized_VM0033.csv"))
+      log_message(sprintf("  Columns: %s", paste(names(global_harmonized), collapse = ", ")))
+    }
+
+  } else if (has_depth && has_carbon && has_bd) {
 
     log_message("Global dataset has depth, carbon, and BD data - attempting harmonization...")
 
