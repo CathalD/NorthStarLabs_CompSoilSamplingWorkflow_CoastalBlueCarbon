@@ -1277,20 +1277,90 @@ if (length(global_data_files) > 0) {
 
   log_message(sprintf("Found %d file(s) in data_global/", length(global_data_files)))
 
-  # Try to load the first CSV or RDS file
-  global_file <- global_data_files[1]
-  log_message(sprintf("Loading global dataset: %s", basename(global_file)))
+  # Check if we have multiple files (depth profiles + metadata)
+  if (length(global_data_files) >= 2) {
+    log_message("Multiple files detected - looking for depth profiles + metadata...")
 
-  if (grepl("\\.csv$", global_file, ignore.case = TRUE)) {
-    global_cores_raw <- read.csv(global_file, stringsAsFactors = FALSE)
-  } else if (grepl("\\.rds$", global_file, ignore.case = TRUE)) {
-    global_cores_raw <- readRDS(global_file)
+    # Load all CSV files
+    all_files <- list()
+    for (i in 1:length(global_data_files)) {
+      if (grepl("\\.csv$", global_data_files[i], ignore.case = TRUE)) {
+        log_message(sprintf("  Loading: %s", basename(global_data_files[i])))
+        df <- read.csv(global_data_files[i], stringsAsFactors = FALSE)
+        names(df) <- tolower(names(df))
+        all_files[[basename(global_data_files[i])]] <- df
+      }
+    }
+
+    # Identify which file is which
+    depth_profile_file <- NULL
+    metadata_file <- NULL
+
+    for (fname in names(all_files)) {
+      df <- all_files[[fname]]
+      has_depth_profile <- any(grepl("depth.*top|depth.*bottom|depth.*min|depth.*max|depth_cm",
+                                     names(df), ignore.case = TRUE))
+      has_soc_bd <- any(grepl("soc|organic.*carbon", names(df), ignore.case = TRUE)) &&
+                    any(grepl("bd|bulk.*density", names(df), ignore.case = TRUE))
+      has_coords <- all(c("latitude", "longitude") %in% names(df))
+
+      if (has_depth_profile && has_soc_bd) {
+        depth_profile_file <- fname
+        log_message(sprintf("  Identified as depth profiles: %s", fname))
+      } else if (has_coords && !has_depth_profile) {
+        metadata_file <- fname
+        log_message(sprintf("  Identified as metadata: %s", fname))
+      }
+    }
+
+    # Merge depth profiles with metadata
+    if (!is.null(depth_profile_file)) {
+      global_cores_raw <- all_files[[depth_profile_file]]
+
+      if (!is.null(metadata_file)) {
+        metadata <- all_files[[metadata_file]]
+
+        # Find common ID column
+        id_col <- NULL
+        for (possible_id in c("sampid", "sampleid", "sample_id", "coreid", "core_id")) {
+          if (possible_id %in% names(global_cores_raw) && possible_id %in% names(metadata)) {
+            id_col <- possible_id
+            break
+          }
+        }
+
+        if (!is.null(id_col)) {
+          log_message(sprintf("  Joining by column: %s", id_col))
+          global_cores_raw <- global_cores_raw %>%
+            left_join(metadata, by = id_col, suffix = c("", "_meta"))
+          log_message(sprintf("  ✓ Merged %d depth profile rows with metadata",
+                             nrow(global_cores_raw)))
+        } else {
+          log_message("  WARNING: Could not find common ID column for merging", "WARNING")
+        }
+      }
+    } else {
+      # If can't identify, just use the first file
+      log_message("  Could not identify file types - using first file")
+      global_cores_raw <- all_files[[1]]
+    }
+
+  } else {
+    # Single file - load it
+    global_file <- global_data_files[1]
+    log_message(sprintf("Loading global dataset: %s", basename(global_file)))
+
+    if (grepl("\\.csv$", global_file, ignore.case = TRUE)) {
+      global_cores_raw <- read.csv(global_file, stringsAsFactors = FALSE)
+    } else if (grepl("\\.rds$", global_file, ignore.case = TRUE)) {
+      global_cores_raw <- readRDS(global_file)
+    }
+
+    # Standardize column names to lowercase for consistent matching
+    names(global_cores_raw) <- tolower(names(global_cores_raw))
   }
 
   log_message(sprintf("Loaded %d rows from global dataset", nrow(global_cores_raw)))
-
-  # Standardize column names to lowercase for consistent matching
-  names(global_cores_raw) <- tolower(names(global_cores_raw))
 
   # Check if this dataset needs harmonization
   # Look for depth and carbon columns
