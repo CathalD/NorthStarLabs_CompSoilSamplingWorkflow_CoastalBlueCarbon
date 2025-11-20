@@ -862,18 +862,18 @@ for (stratum_name in strata) {
                size = 3, alpha = 0.7, shape = 21, fill = "black", color = "white") +
     # Harmonized predictions
     geom_line(data = pred_data,
-              aes(x = soc_harmonized, y = -depth_cm, color = core_id),
+              aes(x = soc_harmonized, y = -depth_cm_midpoint, color = core_id),
               size = 1.2) +
     # CI if available
     {if ("soc_lower" %in% names(pred_data)) {
       geom_ribbon(data = pred_data,
                   aes(xmin = soc_lower, xmax = soc_upper,
-                      y = -depth_cm, group = core_id, fill = core_id),
+                      y = -depth_cm_midpoint, group = core_id, fill = core_id),
                   alpha = 0.15)
     }} +
     # Mark extrapolated regions with dashed lines
     geom_line(data = pred_data %>% filter(!is_interpolated),
-              aes(x = soc_harmonized, y = -depth_cm, group = core_id),
+              aes(x = soc_harmonized, y = -depth_cm_midpoint, group = core_id),
               linetype = "dashed", size = 0.8, alpha = 0.5) +
     facet_wrap(~core_id, scales = "free_x") +
     labs(
@@ -934,18 +934,18 @@ for (stratum_name in strata) {
                size = 3, alpha = 0.7, shape = 21, fill = "darkgreen", color = "white") +
     # Harmonized predictions
     geom_line(data = pred_data,
-              aes(x = bd_harmonized, y = -depth_cm, color = core_id),
+              aes(x = bd_harmonized, y = -depth_cm_midpoint, color = core_id),
               size = 1.2) +
     # CI if available
     {if ("bd_lower" %in% names(pred_data)) {
       geom_ribbon(data = pred_data,
                   aes(xmin = bd_lower, xmax = bd_upper,
-                      y = -depth_cm, group = core_id, fill = core_id),
+                      y = -depth_cm_midpoint, group = core_id, fill = core_id),
                   alpha = 0.15)
     }} +
     # Mark extrapolated regions with dashed lines
     geom_line(data = pred_data %>% filter(!is_interpolated),
-              aes(x = bd_harmonized, y = -depth_cm, group = core_id),
+              aes(x = bd_harmonized, y = -depth_cm_midpoint, group = core_id),
               linetype = "dashed", size = 0.8, alpha = 0.5) +
     facet_wrap(~core_id, scales = "free_x") +
     labs(
@@ -987,12 +987,12 @@ for (stratum_name in strata) {
     filter(core_id %in% core_sample)
 
   p_stock <- ggplot(pred_data_sample,
-                    aes(x = carbon_stock_kg_m2, y = -depth_cm, color = core_id)) +
+                    aes(x = carbon_stock_kg_m2, y = -depth_cm_midpoint, color = core_id)) +
     geom_line(size = 1.2) +
     geom_point(size = 2.5, alpha = 0.7) +
     # Mark extrapolated regions with dashed lines
     geom_line(data = pred_data_sample %>% filter(!is_interpolated),
-              aes(x = carbon_stock_kg_m2, y = -depth_cm, group = core_id),
+              aes(x = carbon_stock_kg_m2, y = -depth_cm_midpoint, group = core_id),
               linetype = "dashed", size = 0.8, alpha = 0.5) +
     facet_wrap(~core_id, scales = "free_x") +
     labs(
@@ -1147,7 +1147,7 @@ log_message("Creating mean profile comparison plots...")
 # Calculate mean profiles by stratum and depth
 mean_profiles <- harmonized_cores %>%
   filter(qa_realistic) %>%
-  group_by(stratum, depth_cm) %>%
+  group_by(stratum, depth_cm_midpoint) %>%
   summarise(
     mean_soc = mean(soc_harmonized, na.rm = TRUE),
     se_soc = sd(soc_harmonized, na.rm = TRUE) / sqrt(n()),
@@ -1160,7 +1160,7 @@ mean_profiles <- harmonized_cores %>%
   )
 
 # SOC mean profile by stratum
-p_soc_mean <- ggplot(mean_profiles, aes(x = mean_soc, y = -depth_cm,
+p_soc_mean <- ggplot(mean_profiles, aes(x = mean_soc, y = -depth_cm_midpoint,
                                          color = stratum, fill = stratum)) +
   geom_ribbon(aes(xmin = mean_soc - se_soc, xmax = mean_soc + se_soc),
               alpha = 0.2, color = NA) +
@@ -1186,7 +1186,7 @@ ggsave("outputs/plots/mean_soc_profiles_by_stratum.png",
        p_soc_mean, width = 10, height = 8, dpi = 300)
 
 # Bulk Density mean profile by stratum
-p_bd_mean <- ggplot(mean_profiles, aes(x = mean_bd, y = -depth_cm,
+p_bd_mean <- ggplot(mean_profiles, aes(x = mean_bd, y = -depth_cm_midpoint,
                                         color = stratum, fill = stratum)) +
   geom_ribbon(aes(xmin = mean_bd - se_bd, xmax = mean_bd + se_bd),
               alpha = 0.2, color = NA) +
@@ -1212,7 +1212,7 @@ ggsave("outputs/plots/mean_bd_profiles_by_stratum.png",
        p_bd_mean, width = 10, height = 8, dpi = 300)
 
 # Carbon Stock mean profile by stratum
-p_stock_mean <- ggplot(mean_profiles, aes(x = mean_carbon_stock, y = -depth_cm,
+p_stock_mean <- ggplot(mean_profiles, aes(x = mean_carbon_stock, y = -depth_cm_midpoint,
                                            color = stratum, fill = stratum)) +
   geom_ribbon(aes(xmin = mean_carbon_stock - se_carbon_stock,
                   xmax = mean_carbon_stock + se_carbon_stock),
@@ -1515,7 +1515,7 @@ log_message("Calculating summary statistics...")
 # Overall summary
 summary_overall <- harmonized_cores %>%
   filter(qa_realistic) %>%
-  group_by(depth_cm) %>%
+  group_by(depth_cm_midpoint) %>%
   summarise(
     n_cores = n_distinct(core_id),
     mean_soc = mean(soc_harmonized, na.rm = TRUE),
@@ -1533,7 +1533,7 @@ summary_overall <- harmonized_cores %>%
 # Summary by stratum
 summary_stratum <- harmonized_cores %>%
   filter(qa_realistic) %>%
-  group_by(stratum, depth_cm) %>%
+  group_by(stratum, depth_cm_midpoint) %>%
   summarise(
     n_cores = n_distinct(core_id),
     mean_soc = mean(soc_harmonized, na.rm = TRUE),
