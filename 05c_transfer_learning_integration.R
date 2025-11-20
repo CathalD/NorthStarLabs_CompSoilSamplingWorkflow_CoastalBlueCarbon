@@ -86,6 +86,15 @@ if (use_global) {
          paste(setdiff(required, names(global_cores)), collapse = ", "))
   }
 
+  # Standardize core_id type - convert both to character
+  # (Local is character, global is numeric - need to match)
+  local_cores$core_id <- as.character(local_cores$core_id)
+  global_cores$core_id <- as.character(global_cores$core_id)
+
+  cat("Standardizing core_id types...\n")
+  cat(sprintf("  Local core_id: character (%d unique)\n", n_distinct(local_cores$core_id)))
+  cat(sprintf("  Global core_id: character (%d unique)\n", n_distinct(global_cores$core_id)))
+
   # Find common columns
   common_cols <- intersect(names(local_cores), names(global_cores))
 
