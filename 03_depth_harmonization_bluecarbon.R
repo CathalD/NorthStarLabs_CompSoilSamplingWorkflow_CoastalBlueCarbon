@@ -1411,18 +1411,21 @@ if (length(global_data_files) > 0) {
         global_harmonized <- bind_rows(global_harmonized_list)
 
         # Add back metadata columns if they exist
-        metadata_cols <- setdiff(names(global_cores_raw),
-                                c(depth_cols, carbon_cols, bd_cols))
+        # Use global_cores_prep (which has core_id standardized) not global_cores_raw
+        metadata_cols <- setdiff(names(global_cores_prep),
+                                c(depth_cols, carbon_cols, bd_cols, "depth_cm_midpoint"))
 
         if (length(metadata_cols) > 0) {
-          # Get unique metadata per core
-          global_metadata <- global_cores_raw %>%
-            distinct(across(any_of(c("core_id", "sample_id", metadata_cols)))) %>%
-            select(any_of(c("core_id", "sample_id", "latitude", "longitude", "ecosystem")))
+          # Get unique metadata per core from the prepared dataset
+          global_metadata <- global_cores_prep %>%
+            distinct(core_id, .keep_all = TRUE) %>%
+            select(any_of(c("core_id", "latitude", "longitude", "ecosystem", "site", "stratum")))
 
-          # Merge
-          global_harmonized <- global_harmonized %>%
-            left_join(global_metadata, by = "core_id")
+          # Only join if global_metadata has core_id
+          if ("core_id" %in% names(global_metadata)) {
+            global_harmonized <- global_harmonized %>%
+              left_join(global_metadata, by = "core_id")
+          }
         }
 
         # Save harmonized global data
