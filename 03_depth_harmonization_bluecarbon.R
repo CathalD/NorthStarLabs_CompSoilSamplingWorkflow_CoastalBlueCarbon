@@ -1357,10 +1357,14 @@ if (length(global_data_files) > 0) {
 
       global_harmonized_list <- list()
       n_global_cores <- n_distinct(global_cores_prep$core_id)
+      unique_core_ids <- unique(global_cores_prep$core_id)
+
+      log_message(sprintf("  Found %d unique cores in global dataset", n_global_cores))
+      log_message(sprintf("  Will harmonize up to %d cores", min(n_global_cores, 1000)))
 
       for (i in seq_len(min(n_global_cores, 1000))) {  # Limit to 1000 cores for speed
 
-        core_id_val <- unique(global_cores_prep$core_id)[i]
+        core_id_val <- unique_core_ids[i]
         core_data <- global_cores_prep %>% filter(core_id == core_id_val)
 
         if (nrow(core_data) < 2) next  # Need at least 2 points for spline
