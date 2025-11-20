@@ -123,56 +123,76 @@ if (use_global) {
 }
 
 # ============================================================================
-# STEP 3: EXTRACT LOCAL COVARIATES (Optional)
+# STEP 3: CHECK AND EXTRACT COVARIATES (if needed)
 # ============================================================================
 
-cat("\nSTEP 3: Checking for local covariates...\n\n")
+cat("\nSTEP 3: Checking covariates...\n\n")
 
-# Check if covariates folder exists
+# Check if global data already has covariates (from GEE)
+existing_covariates <- names(combined_data)[grepl("^(gsw_|sg_|topo_|wc_|elevation_)", names(combined_data))]
+
+if (length(existing_covariates) > 0) {
+  cat(sprintf("✓ Global data has %d existing covariates\n", length(existing_covariates)))
+  cat("  Examples:", paste(head(existing_covariates, 3), collapse = ", "), "...\n")
+
+  # Check how many rows have covariate data
+  has_covariates <- rowSums(!is.na(combined_data[, existing_covariates, drop = FALSE])) > 0
+  cat(sprintf("  - %d samples with covariates (global)\n", sum(has_covariates)))
+  cat(sprintf("  - %d samples without covariates (local)\n", sum(!has_covariates)))
+
+} else {
+  cat("No existing covariates found - will try to extract from rasters\n")
+}
+
+# Try to extract local covariates for samples that don't have them
 if (dir.exists("covariates")) {
 
   covariate_files <- list.files("covariates", pattern = "\\.tif$",
                                 full.names = TRUE, recursive = TRUE,
                                 ignore.case = TRUE)
 
-  if (length(covariate_files) > 0) {
+  if (length(covariate_files) > 0 && all(c("latitude", "longitude") %in% names(combined_data))) {
 
-    cat(sprintf("✓ Found %d covariate rasters\n", length(covariate_files)))
+    cat(sprintf("\n✓ Found %d local covariate rasters\n", length(covariate_files)))
 
-    # Load raster stack
-    covariate_stack <- rast(covariate_files)
-    names(covariate_stack) <- gsub("\\.(tif|tiff)$", "", basename(covariate_files))
+    # Identify which rows need covariate extraction (local data without covariates)
+    if (length(existing_covariates) > 0) {
+      has_covariates <- rowSums(!is.na(combined_data[, existing_covariates, drop = FALSE])) > 0
+      needs_extraction <- !has_covariates & !is.na(combined_data$latitude) & !is.na(combined_data$longitude)
+    } else {
+      needs_extraction <- !is.na(combined_data$latitude) & !is.na(combined_data$longitude)
+    }
 
-    cat("  Covariates:", paste(names(covariate_stack), collapse = ", "), "\n\n")
+    if (sum(needs_extraction) > 0) {
+      cat(sprintf("  Extracting for %d local samples...\n", sum(needs_extraction)))
 
-    # Extract for cores with lat/lon
-    if (all(c("latitude", "longitude") %in% names(combined_data))) {
+      # Load raster stack
+      covariate_stack <- rast(covariate_files)
+      names(covariate_stack) <- gsub("\\.(tif|tiff)$", "", basename(covariate_files))
 
-      cores_with_coords <- combined_data %>%
-        filter(!is.na(latitude), !is.na(longitude))
-
-      cores_sf <- st_as_sf(cores_with_coords,
-                          coords = c("longitude", "latitude"),
-                          crs = 4326)
-      cores_sf <- st_transform(cores_sf, crs = crs(covariate_stack))
+      # Extract for local cores
+      local_cores_sf <- st_as_sf(combined_data[needs_extraction, ],
+                                coords = c("longitude", "latitude"),
+                                crs = 4326)
+      local_cores_sf <- st_transform(local_cores_sf, crs = crs(covariate_stack))
 
       # Extract values
-      covariate_values <- terra::extract(covariate_stack, cores_sf, ID = FALSE)
+      local_covariate_values <- terra::extract(covariate_stack, local_cores_sf, ID = FALSE)
 
-      # Add to data
-      combined_data <- bind_cols(cores_with_coords, covariate_values)
+      # Add extracted values to combined_data for local rows
+      for (col in names(local_covariate_values)) {
+        if (!col %in% names(combined_data)) {
+          combined_data[[col]] <- NA
+        }
+        combined_data[needs_extraction, col] <- local_covariate_values[[col]]
+      }
 
-      cat(sprintf("✓ Extracted %d covariates at core locations\n",
-                  ncol(covariate_values)))
+      cat(sprintf("✓ Extracted %d local covariates\n", ncol(local_covariate_values)))
 
     } else {
-      cat("  (No latitude/longitude - skipping extraction)\n")
+      cat("  (All samples already have covariates)\n")
     }
-  } else {
-    cat("  (No .tif files found)\n")
   }
-} else {
-  cat("  (No covariates folder found)\n")
 }
 
 # ============================================================================
@@ -191,10 +211,14 @@ if (!"carbon_stock_kg_m2" %in% names(combined_data)) {
 }
 
 # Identify predictor columns
-exclude_cols <- c("core_id", "sample_id", "latitude", "longitude", "ecosystem",
-                 "site", "stratum", "depth_cm_midpoint", "carbon_stock_kg_m2",
-                 "soc_harmonized", "bd_harmonized", "data_source",
-                 "qa_pass", "qa_realistic", "qa_monotonic")
+exclude_cols <- c("core_id", "sample_id", "studyid", "study_id", "studysampid",
+                 "subsampid", "subsample_id", "latitude", "longitude", "ecosystem",
+                 "site", "stratum", "depth_cm_midpoint", "depth_cm", "carbon_stock_kg_m2",
+                 "soc_harmonized", "bd_harmonized", "data_source", "depth_min", "depth_max",
+                 "depth_top_cm", "depth_bottom_cm", "carbon_stock_30cm", "carbon_stock_50cm",
+                 "carbon_stock_100cm", "core_depth", "core_depth_cm", "state", "estuary_id",
+                 "estuary_type", "kgzone", "ecoregion", "veg_group", "grain_type",
+                 "qa_pass", "qa_realistic", "qa_monotonic", ".geo", "system:index")
 
 # Find numeric predictors
 all_cols <- names(combined_data)
@@ -202,18 +226,43 @@ predictor_cols <- setdiff(all_cols, exclude_cols)
 numeric_check <- sapply(combined_data[predictor_cols], is.numeric)
 predictor_cols <- predictor_cols[numeric_check]
 
+# Check data coverage for each predictor
+# Keep only predictors with at least 80% non-NA values
+if (length(predictor_cols) > 0) {
+  na_pct <- sapply(combined_data[predictor_cols], function(x) sum(is.na(x)) / length(x))
+  good_coverage <- na_pct < 0.2  # Less than 20% NA
+
+  if (sum(good_coverage) > 0) {
+    predictor_cols <- predictor_cols[good_coverage]
+    cat(sprintf("✓ Found %d predictors with good coverage (>80%% non-NA):\n", length(predictor_cols)))
+
+    # Show predictor categories
+    gee_preds <- grep("^(gsw_|sg_|topo_|wc_)", predictor_cols, value = TRUE)
+    local_preds <- setdiff(predictor_cols, gee_preds)
+
+    if (length(gee_preds) > 0) {
+      cat(sprintf("  - GEE covariates: %d\n", length(gee_preds)))
+    }
+    if (length(local_preds) > 0) {
+      cat(sprintf("  - Local covariates: %d\n", length(local_preds)))
+    }
+
+    cat("\n  Predictors:\n")
+    for (pred in predictor_cols) {
+      na_count <- sum(is.na(combined_data[[pred]]))
+      cat(sprintf("    - %s (%.1f%% complete)\n", pred, 100 * (1 - na_count/nrow(combined_data))))
+    }
+  } else {
+    predictor_cols <- character(0)
+  }
+}
+
 if (length(predictor_cols) == 0) {
-  cat("\nWARNING: No predictor variables found!\n")
+  cat("\nWARNING: No predictor variables with sufficient coverage!\n")
   cat("Available columns:\n")
   print(names(combined_data))
   cat("\nCannot train models without predictors.\n")
-  cat("Please add covariate rasters to ./covariates/ folder\n\n")
   quit(save = "no", status = 1)
-}
-
-cat(sprintf("✓ Found %d predictor variables:\n", length(predictor_cols)))
-for (pred in predictor_cols) {
-  cat(sprintf("  - %s\n", pred))
 }
 
 # ============================================================================
@@ -235,8 +284,11 @@ for (target_depth in vm0033_depths) {
   # Filter to this depth (±5 cm tolerance)
   data_depth <- combined_data %>%
     filter(abs(depth_cm_midpoint - target_depth) < 5,
-           !is.na(carbon_stock_kg_m2)) %>%
-    drop_na(all_of(predictor_cols))  # Remove NA predictors
+           !is.na(carbon_stock_kg_m2))
+
+  # Only remove rows where ALL predictors are NA (keep rows with at least some data)
+  has_any_predictor <- rowSums(!is.na(data_depth[, predictor_cols, drop = FALSE])) > 0
+  data_depth <- data_depth[has_any_predictor, ]
 
   n_samples <- nrow(data_depth)
   cat(sprintf("  Samples: %d\n", n_samples))
@@ -254,8 +306,39 @@ for (target_depth in vm0033_depths) {
     cat(sprintf("  - Global: %d\n", n_global))
   }
 
+  # Check predictor coverage at this depth
+  pred_coverage <- colSums(!is.na(data_depth[, predictor_cols, drop = FALSE])) / nrow(data_depth)
+  good_preds <- names(pred_coverage)[pred_coverage >= 0.5]  # At least 50% coverage
+
+  if (length(good_preds) < 3) {
+    cat("  SKIP: Not enough predictors with good coverage (< 3)\n")
+    next
+  }
+
+  # Use only predictors with good coverage at this depth
+  active_predictors <- good_preds
+
+  cat(sprintf("  Using %d predictors with good coverage at this depth\n", length(active_predictors)))
+
+  # Remove rows with NA in active predictors
+  data_depth <- data_depth %>%
+    drop_na(all_of(active_predictors))
+
+  # Recount after dropping NAs
+  n_samples_final <- nrow(data_depth)
+  if (n_samples_final < 10) {
+    cat(sprintf("  SKIP: Only %d samples remain after removing NAs\n", n_samples_final))
+    next
+  }
+
+  if (use_global && "data_source" %in% names(data_depth)) {
+    n_local_final <- sum(data_depth$data_source == "local")
+    n_global_final <- sum(data_depth$data_source == "global")
+    cat(sprintf("  After NA removal: Local=%d, Global=%d\n", n_local_final, n_global_final))
+  }
+
   # Build formula
-  formula_str <- paste("carbon_stock_kg_m2 ~", paste(predictor_cols, collapse = " + "))
+  formula_str <- paste("carbon_stock_kg_m2 ~", paste(active_predictors, collapse = " + "))
   formula_rf <- as.formula(formula_str)
 
   # Train Random Forest
@@ -279,8 +362,8 @@ for (target_depth in vm0033_depths) {
   # Store results
   results[[as.character(target_depth)]] <- list(
     depth_cm = target_depth,
-    n_samples = n_samples,
-    n_predictors = length(predictor_cols),
+    n_samples = n_samples_final,
+    n_predictors = length(active_predictors),
     r_squared = r2,
     rmse = rmse,
     model = rf_model
