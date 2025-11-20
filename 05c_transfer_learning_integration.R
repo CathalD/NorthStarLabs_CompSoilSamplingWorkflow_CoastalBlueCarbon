@@ -395,15 +395,44 @@ if (use_transfer_learning && length(global_cols) > 0) {
 
 cat("\n=== STEP 3: Train Models by Depth ===\n\n")
 
+# Detect depth column name
+possible_depth_cols <- c("depth_cm_midpoint", "depth_midpoint", "depth_cm", "depth", "depth_mid")
+depth_col <- NULL
+
+for (col in possible_depth_cols) {
+  if (col %in% names(cores_merged)) {
+    depth_col <- col
+    break
+  }
+}
+
+if (is.null(depth_col)) {
+  cat("ERROR: No depth column found in cores data!\n")
+  cat("Looked for:", paste(possible_depth_cols, collapse = ", "), "\n")
+  cat("\nAvailable columns:\n")
+  cat(paste("  ", names(cores_merged), collapse = "\n"), "\n\n")
+  quit(save = "no", status = 1)
+}
+
+cat(sprintf("✓ Using depth column: '%s'\n", depth_col))
+
+# Check if carbon_stock_kg_m2 exists
+if (!"carbon_stock_kg_m2" %in% names(cores_merged)) {
+  cat("\nERROR: Target variable 'carbon_stock_kg_m2' not found!\n")
+  cat("Available columns:\n")
+  cat(paste("  ", names(cores_merged), collapse = "\n"), "\n\n")
+  quit(save = "no", status = 1)
+}
+
 results <- list()
 
 for (depth_cm in CONFIG$target_depths) {
 
   cat(sprintf("\n--- Training models for depth: %g cm ---\n", depth_cm))
 
-  # Filter to depth
+  # Filter to depth (using detected column name)
   data_depth <- cores_merged %>%
-    filter(abs(depth_cm_midpoint - depth_cm) < 5) %>%
+    filter(abs(.data[[depth_col]] - depth_cm) < 5) %>%
     drop_na(carbon_stock_kg_m2)
 
   cat(sprintf("  Samples at this depth: %d\n", nrow(data_depth)))
