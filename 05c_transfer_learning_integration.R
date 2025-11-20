@@ -217,7 +217,7 @@ exclude_cols <- c("core_id", "sample_id", "studyid", "study_id", "studysampid",
                  "soc_harmonized", "bd_harmonized", "data_source", "depth_min", "depth_max",
                  "depth_top_cm", "depth_bottom_cm", "carbon_stock_30cm", "carbon_stock_50cm",
                  "carbon_stock_100cm", "core_depth", "core_depth_cm", "state", "estuary_id",
-                 "estuary_type", "kgzone", "ecoregion", "veg_group", "grain_type",
+                 "estuary_type", "kgzone", "ecoregion", "grain_type",
                  "qa_pass", "qa_realistic", "qa_monotonic", ".geo", "system:index")
 
 # Find numeric predictors
