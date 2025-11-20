@@ -1255,6 +1255,198 @@ write.csv(harmonized_cores, "data_processed/cores_harmonized_bluecarbon.csv",
 saveRDS(diagnostics_df, "diagnostics/harmonization_diagnostics.rds")
 write.csv(diagnostics_df, "diagnostics/harmonization_diagnostics.csv", row.names = FALSE)
 
+# ============================================================================
+# HARMONIZE GLOBAL DATASET (if available, for transfer learning)
+# ============================================================================
+
+log_message("Checking for global dataset...")
+
+# Look for global dataset (Janousek or other large-scale data)
+global_data_files <- list.files("data_global",
+                               pattern = "\\.(csv|rds)$",
+                               full.names = TRUE,
+                               ignore.case = TRUE)
+
+if (length(global_data_files) > 0) {
+
+  log_message(sprintf("Found %d file(s) in data_global/", length(global_data_files)))
+
+  # Try to load the first CSV or RDS file
+  global_file <- global_data_files[1]
+  log_message(sprintf("Loading global dataset: %s", basename(global_file)))
+
+  if (grepl("\\.csv$", global_file, ignore.case = TRUE)) {
+    global_cores_raw <- read.csv(global_file, stringsAsFactors = FALSE)
+  } else if (grepl("\\.rds$", global_file, ignore.case = TRUE)) {
+    global_cores_raw <- readRDS(global_file)
+  }
+
+  log_message(sprintf("Loaded %d rows from global dataset", nrow(global_cores_raw)))
+
+  # Check if this dataset needs harmonization
+  # Look for depth and carbon columns
+  has_depth <- any(grepl("depth", names(global_cores_raw), ignore.case = TRUE))
+  has_carbon <- any(grepl("carbon|soc", names(global_cores_raw), ignore.case = TRUE))
+  has_bd <- any(grepl("bulk.*density|bd_g", names(global_cores_raw), ignore.case = TRUE))
+
+  if (has_depth && has_carbon && has_bd) {
+
+    log_message("Global dataset has depth, carbon, and BD data - attempting harmonization...")
+
+    # Detect column names
+    depth_cols <- grep("depth", names(global_cores_raw), ignore.case = TRUE, value = TRUE)
+    carbon_cols <- grep("carbon|soc", names(global_cores_raw), ignore.case = TRUE, value = TRUE)
+    bd_cols <- grep("bulk.*density|bd_g", names(global_cores_raw), ignore.case = TRUE, value = TRUE)
+
+    log_message(sprintf("  Depth columns: %s", paste(depth_cols, collapse = ", ")))
+    log_message(sprintf("  Carbon columns: %s", paste(carbon_cols, collapse = ", ")))
+    log_message(sprintf("  BD columns: %s", paste(bd_cols, collapse = ", ")))
+
+    # Prepare for harmonization - need core_id, depth, soc, bd
+    global_cores_prep <- global_cores_raw
+
+    # Detect/create core_id
+    if ("core_id" %in% names(global_cores_prep)) {
+      # Already has core_id
+    } else if ("sample_id" %in% names(global_cores_prep)) {
+      global_cores_prep$core_id <- global_cores_prep$sample_id
+    } else {
+      # Create core_id from row numbers
+      global_cores_prep$core_id <- paste0("GLOBAL_", 1:nrow(global_cores_prep))
+    }
+
+    # Try to detect depth midpoint or calculate it
+    if ("depth_cm_midpoint" %in% names(global_cores_prep)) {
+      depth_col <- "depth_cm_midpoint"
+    } else if (all(c("depth_min", "depth_max") %in% names(global_cores_prep))) {
+      global_cores_prep$depth_cm_midpoint <- (global_cores_prep$depth_min + global_cores_prep$depth_max) / 2
+      depth_col <- "depth_cm_midpoint"
+    } else if (all(c("depth_top_cm", "depth_bottom_cm") %in% names(global_cores_prep))) {
+      global_cores_prep$depth_cm_midpoint <- (global_cores_prep$depth_top_cm + global_cores_prep$depth_bottom_cm) / 2
+      depth_col <- "depth_cm_midpoint"
+    } else if ("depth_cm" %in% names(global_cores_prep)) {
+      depth_col <- "depth_cm"
+    } else {
+      log_message("Cannot determine depth column - skipping global harmonization", "WARNING")
+      depth_col <- NULL
+    }
+
+    if (!is.null(depth_col)) {
+
+      # Harmonize each core in the global dataset
+      log_message("Harmonizing global cores to VM0033 depths...")
+
+      global_harmonized_list <- list()
+      n_global_cores <- n_distinct(global_cores_prep$core_id)
+
+      for (i in seq_len(min(n_global_cores, 1000))) {  # Limit to 1000 cores for speed
+
+        core_id_val <- unique(global_cores_prep$core_id)[i]
+        core_data <- global_cores_prep %>% filter(core_id == core_id_val)
+
+        if (nrow(core_data) < 2) next  # Need at least 2 points for spline
+
+        depths <- core_data[[depth_col]]
+
+        # Find SOC column
+        soc_col <- NULL
+        for (col in c("soc_g_kg", "soc_percent", "carbon_percent", carbon_cols[1])) {
+          if (col %in% names(core_data)) {
+            soc_col <- col
+            break
+          }
+        }
+
+        # Find BD column
+        bd_col <- NULL
+        for (col in c("bd_g_cm3", "bulk_density", "BD", bd_cols[1])) {
+          if (col %in% names(core_data)) {
+            bd_col <- col
+            break
+          }
+        }
+
+        if (is.null(soc_col) || is.null(bd_col)) next
+
+        soc_vals <- core_data[[soc_col]]
+        bd_vals <- core_data[[bd_col]]
+
+        # Convert SOC percent to g/kg if needed
+        if (grepl("percent", soc_col, ignore.case = TRUE) && max(soc_vals, na.rm = TRUE) < 20) {
+          soc_vals <- soc_vals * 10
+        }
+
+        # Remove NAs
+        valid_idx <- !is.na(depths) & !is.na(soc_vals) & !is.na(bd_vals)
+        if (sum(valid_idx) < 2) next
+
+        depths <- depths[valid_idx]
+        soc_vals <- soc_vals[valid_idx]
+        bd_vals <- bd_vals[valid_idx]
+
+        # Harmonize using equal_area_spline function
+        soc_harm <- equal_area_spline(depths, soc_vals, VM0033_DEPTH_MIDPOINTS)
+        bd_harm <- equal_area_spline(depths, bd_vals, VM0033_DEPTH_MIDPOINTS)
+
+        if (!is.null(soc_harm) && !is.null(bd_harm)) {
+          # Calculate carbon stock
+          carbon_stock <- (soc_harm * bd_harm * c(15, 15, 20, 50)) / 1000  # kg/m2
+
+          global_harmonized_list[[i]] <- data.frame(
+            core_id = core_id_val,
+            depth_cm_midpoint = VM0033_DEPTH_MIDPOINTS,
+            soc_harmonized = soc_harm,
+            bd_harmonized = bd_harm,
+            carbon_stock_kg_m2 = carbon_stock,
+            stringsAsFactors = FALSE
+          )
+        }
+
+        if (i %% 100 == 0) {
+          log_message(sprintf("  Harmonized %d / %d global cores", i, min(n_global_cores, 1000)))
+        }
+      }
+
+      if (length(global_harmonized_list) > 0) {
+        global_harmonized <- bind_rows(global_harmonized_list)
+
+        # Add back metadata columns if they exist
+        metadata_cols <- setdiff(names(global_cores_raw),
+                                c(depth_cols, carbon_cols, bd_cols))
+
+        if (length(metadata_cols) > 0) {
+          # Get unique metadata per core
+          global_metadata <- global_cores_raw %>%
+            distinct(across(any_of(c("core_id", "sample_id", metadata_cols)))) %>%
+            select(any_of(c("core_id", "sample_id", "latitude", "longitude", "ecosystem")))
+
+          # Merge
+          global_harmonized <- global_harmonized %>%
+            left_join(global_metadata, by = "core_id")
+        }
+
+        # Save harmonized global data
+        saveRDS(global_harmonized, "data_processed/global_cores_harmonized_VM0033.rds")
+        write.csv(global_harmonized, "data_processed/global_cores_harmonized_VM0033.csv",
+                 row.names = FALSE)
+
+        log_message(sprintf("✓ Harmonized %d global cores to VM0033 depths",
+                           n_distinct(global_harmonized$core_id)))
+        log_message("  Saved to: data_processed/global_cores_harmonized_VM0033.csv")
+
+      } else {
+        log_message("No global cores could be harmonized", "WARNING")
+      }
+    }
+
+  } else {
+    log_message("Global dataset missing required columns (depth, carbon, BD) - skipping harmonization")
+  }
+
+} else {
+  log_message("No global dataset found in data_global/ - skipping global harmonization")
+}
+
 # Save method metadata
 harmonization_metadata <- list(
   method = INTERPOLATION_METHOD,

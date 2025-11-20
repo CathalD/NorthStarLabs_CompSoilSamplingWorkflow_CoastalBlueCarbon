@@ -40,7 +40,8 @@ cat("========================================\n\n")
 
 CONFIG <- list(
   # Input files
-  local_cores = "data_processed/harmonized_cores_VM0033.csv",
+  local_cores = "data_processed/cores_harmonized_bluecarbon.csv",
+  global_cores = "data_processed/global_cores_harmonized_VM0033.csv",
   global_features = "data_global/cores_with_bluecarbon_global_maps.csv",
 
   # Output directories
@@ -79,7 +80,57 @@ if (!file.exists(CONFIG$local_cores)) {
 }
 
 local_cores <- read_csv(CONFIG$local_cores, show_col_types = FALSE)
-cat(sprintf("✓ Loaded %d local cores\n", nrow(local_cores)))
+cat(sprintf("✓ Loaded %d local cores (harmonized)\n", nrow(local_cores)))
+cat(sprintf("  Depths: %d samples at VM0033 standard depths\n",
+            sum(local_cores$depth_cm_midpoint %in% c(7.5, 22.5, 40, 75))))
+
+# Load global harmonized cores (if available)
+if (file.exists(CONFIG$global_cores)) {
+  global_cores <- read_csv(CONFIG$global_cores, show_col_types = FALSE)
+  cat(sprintf("\n✓ Loaded %d global cores (harmonized)\n", nrow(global_cores)))
+  cat(sprintf("  Global dataset: %d unique cores\n", n_distinct(global_cores$core_id)))
+  cat(sprintf("  Depths: %d samples at VM0033 standard depths\n",
+              sum(global_cores$depth_cm_midpoint %in% c(7.5, 22.5, 40, 75))))
+
+  # Add source identifier
+  local_cores <- local_cores %>% mutate(data_source = "local")
+  global_cores <- global_cores %>% mutate(data_source = "global")
+
+  # Combine local and global datasets
+  cat("\nCombining local and global cores...\n")
+
+  # Find common columns
+  common_cols <- intersect(names(local_cores), names(global_cores))
+  required_cols <- c("core_id", "depth_cm_midpoint", "soc_harmonized", "bd_harmonized", "carbon_stock_kg_m2")
+
+  if (all(required_cols %in% common_cols)) {
+    # Merge on common columns
+    combined_cores <- bind_rows(
+      local_cores %>% select(any_of(common_cols)),
+      global_cores %>% select(any_of(common_cols))
+    )
+
+    cat(sprintf("✓ Combined dataset: %d total samples from %d cores\n",
+                nrow(combined_cores), n_distinct(combined_cores$core_id)))
+    cat(sprintf("  Local: %d samples\n", sum(combined_cores$data_source == "local")))
+    cat(sprintf("  Global: %d samples\n", sum(combined_cores$data_source == "global")))
+
+    # Use combined dataset
+    local_cores <- combined_cores
+
+  } else {
+    missing <- setdiff(required_cols, common_cols)
+    cat(sprintf("\nWARNING: Cannot combine datasets - missing columns: %s\n",
+                paste(missing, collapse = ", ")))
+    cat("Using local cores only.\n")
+  }
+
+} else {
+  cat("\nNo global harmonized cores found.\n")
+  cat("  Expected:", CONFIG$global_cores, "\n")
+  cat("  Continuing with local cores only.\n")
+  cat("  (Run Module 03 to harmonize global dataset)\n\n")
+}
 
 # Load global features
 if (!file.exists(CONFIG$global_features)) {
