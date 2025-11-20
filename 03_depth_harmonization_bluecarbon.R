@@ -453,6 +453,10 @@ predict_at_standard_depths <- function(core_data, standard_depths,
                                      thickness_cm / 1000
   }
 
+  # Add duplicate depth column for backward compatibility
+  # Both depth_cm_midpoint and depth_cm point to same values
+  result$depth_cm <- result$depth_cm_midpoint
+
   # Add metadata
   result$longitude <- unique(core_data$longitude)
   result$latitude <- unique(core_data$latitude)
@@ -1432,6 +1436,9 @@ if (length(global_data_files) > 0) {
 
       if (length(global_harmonized_list) > 0) {
         global_harmonized <- bind_rows(global_harmonized_list)
+
+        # Add duplicate depth column for backward compatibility
+        global_harmonized$depth_cm <- global_harmonized$depth_cm_midpoint
 
         log_message(sprintf("✓ Combined %d harmonized samples from global cores",
                            nrow(global_harmonized)))
