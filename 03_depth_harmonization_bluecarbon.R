@@ -752,7 +752,7 @@ monotonicity_flags <- list()
 for (core_id in unique(harmonized_cores$core_id)) {
   core_pred <- harmonized_cores %>%
     filter(core_id == !!core_id) %>%
-    arrange(depth_cm)
+    arrange(depth_cm_midpoint)  # Changed to match column name
 
   if (nrow(core_pred) > 1) {
     # Calculate pairwise changes between adjacent depths
@@ -766,7 +766,7 @@ for (core_id in unique(harmonized_cores$core_id)) {
     }
 
     # Check for correlation with depth (should generally be negative)
-    cor_depth <- cor(core_pred$depth_cm, core_pred$soc_harmonized)
+    cor_depth <- cor(core_pred$depth_cm_midpoint, core_pred$soc_harmonized)  # Changed to match column name
 
     # Allow slight increases if configured
     if (ALLOW_DEPTH_INCREASES) {
