@@ -395,34 +395,69 @@ if (use_transfer_learning && length(global_cols) > 0) {
 
 cat("\n=== STEP 3: Train Models by Depth ===\n\n")
 
-# Detect depth column name
-possible_depth_cols <- c("depth_cm_midpoint", "depth_midpoint", "depth_cm", "depth", "depth_mid")
+# Detect or calculate depth midpoint column
 depth_col <- NULL
 
-for (col in possible_depth_cols) {
-  if (col %in% names(cores_merged)) {
-    depth_col <- col
-    break
+# Option 1: Check for harmonized depth column
+if ("depth_cm_midpoint" %in% names(cores_merged)) {
+  depth_col <- "depth_cm_midpoint"
+  cat("✓ Using harmonized depth column: 'depth_cm_midpoint'\n")
+
+} else {
+  cat("Harmonized depth column not found. Attempting to calculate from raw depth columns...\n")
+
+  # Option 2: Calculate from depth_min/depth_max
+  if (all(c("depth_min", "depth_max") %in% names(cores_merged))) {
+    cores_merged <- cores_merged %>%
+      mutate(depth_cm_midpoint = (depth_min + depth_max) / 2)
+    depth_col <- "depth_cm_midpoint"
+    cat("✓ Calculated depth_cm_midpoint from depth_min and depth_max\n")
+
+  # Option 3: Calculate from depth_top_cm/depth_bottom_cm
+  } else if (all(c("depth_top_cm", "depth_bottom_cm") %in% names(cores_merged))) {
+    cores_merged <- cores_merged %>%
+      mutate(depth_cm_midpoint = (depth_top_cm + depth_bottom_cm) / 2)
+    depth_col <- "depth_cm_midpoint"
+    cat("✓ Calculated depth_cm_midpoint from depth_top_cm and depth_bottom_cm\n")
+
+  # Option 4: Use depth_cm if available
+  } else if ("depth_cm" %in% names(cores_merged)) {
+    depth_col <- "depth_cm"
+    cat("✓ Using depth_cm column\n")
+
+  } else {
+    cat("\nERROR: Cannot determine depth!\n\n")
+    cat("Available depth-related columns:\n")
+    depth_cols <- grep("depth", names(cores_merged), ignore.case = TRUE, value = TRUE)
+    if (length(depth_cols) > 0) {
+      cat(paste("  ", depth_cols, collapse = "\n"), "\n\n")
+    } else {
+      cat("  (none found)\n\n")
+    }
+    cat("SOLUTION: Please run Module 03 (depth harmonization) first:\n")
+    cat("  Rscript 03_depth_harmonization_bluecarbon.R\n\n")
+    cat("This will create VM0033 standard depths and harmonize your core data.\n\n")
+    quit(save = "no", status = 1)
   }
 }
-
-if (is.null(depth_col)) {
-  cat("ERROR: No depth column found in cores data!\n")
-  cat("Looked for:", paste(possible_depth_cols, collapse = ", "), "\n")
-  cat("\nAvailable columns:\n")
-  cat(paste("  ", names(cores_merged), collapse = "\n"), "\n\n")
-  quit(save = "no", status = 1)
-}
-
-cat(sprintf("✓ Using depth column: '%s'\n", depth_col))
 
 # Check if carbon_stock_kg_m2 exists
 if (!"carbon_stock_kg_m2" %in% names(cores_merged)) {
   cat("\nERROR: Target variable 'carbon_stock_kg_m2' not found!\n")
-  cat("Available columns:\n")
-  cat(paste("  ", names(cores_merged), collapse = "\n"), "\n\n")
+
+  # Check for alternative carbon column names
+  carbon_cols <- grep("carbon|soc|stock", names(cores_merged), ignore.case = TRUE, value = TRUE)
+  if (length(carbon_cols) > 0) {
+    cat("\nFound these carbon-related columns:\n")
+    cat(paste("  ", carbon_cols, collapse = "\n"), "\n\n")
+    cat("SOLUTION: Run Module 03 (depth harmonization) to calculate carbon_stock_kg_m2\n\n")
+  }
+
   quit(save = "no", status = 1)
 }
+
+cat(sprintf("✓ Using %d samples with depth and carbon data\n",
+            sum(!is.na(cores_merged[[depth_col]]) & !is.na(cores_merged$carbon_stock_kg_m2))))
 
 results <- list()
 
