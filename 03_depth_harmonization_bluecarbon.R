@@ -397,7 +397,7 @@ predict_at_standard_depths <- function(core_data, standard_depths,
   result <- data.frame(
     core_id = unique(core_data$core_id),
     stratum = unique(core_data$stratum),
-    depth_cm = standard_depths,
+    depth_cm_midpoint = standard_depths,  # Changed to match global dataset
     soc_harmonized = predictions,
     bd_harmonized = bd_predictions
   )
@@ -413,7 +413,7 @@ predict_at_standard_depths <- function(core_data, standard_depths,
   result$carbon_stock_kg_m2 <- NA_real_
 
   for (i in 1:nrow(result)) {
-    curr_depth <- result$depth_cm[i]
+    curr_depth <- result$depth_cm_midpoint[i]  # Changed to match column name
 
     # Match depth to VM0033 interval to get correct thickness
     interval_match <- which(VM0033_DEPTH_INTERVALS$depth_midpoint == curr_depth)
@@ -430,13 +430,13 @@ predict_at_standard_depths <- function(core_data, standard_depths,
       # Use interpolated increment as fallback
       if (i == 1) {
         depth_top <- 0
-        depth_bottom <- (result$depth_cm[i] + result$depth_cm[i+1]) / 2
+        depth_bottom <- (result$depth_cm_midpoint[i] + result$depth_cm_midpoint[i+1]) / 2
       } else if (i == nrow(result)) {
-        depth_top <- (result$depth_cm[i-1] + result$depth_cm[i]) / 2
+        depth_top <- (result$depth_cm_midpoint[i-1] + result$depth_cm_midpoint[i]) / 2
         depth_bottom <- MAX_CORE_DEPTH
       } else {
-        depth_top <- (result$depth_cm[i-1] + result$depth_cm[i]) / 2
-        depth_bottom <- (result$depth_cm[i] + result$depth_cm[i+1]) / 2
+        depth_top <- (result$depth_cm_midpoint[i-1] + result$depth_cm_midpoint[i]) / 2
+        depth_bottom <- (result$depth_cm_midpoint[i] + result$depth_cm_midpoint[i+1]) / 2
       }
       thickness_cm <- depth_bottom - depth_top
     }
@@ -1646,7 +1646,7 @@ if (nrow(diagnostics_df) > 0) {
 
 cat("\nSOC at VM0033 Surface Layer (7.5 cm) by Stratum:\n")
 surface_summary <- harmonized_cores %>%
-  filter(depth_cm == STANDARD_DEPTHS[1], qa_realistic) %>%
+  filter(depth_cm_midpoint == STANDARD_DEPTHS[1], qa_realistic) %>%
   group_by(stratum) %>%
   summarise(
     mean_soc = mean(soc_harmonized),
@@ -1666,7 +1666,7 @@ for (i in 1:nrow(surface_summary)) {
 
 cat("\nBulk Density at VM0033 Surface Layer (7.5 cm) by Stratum:\n")
 bd_summary <- harmonized_cores %>%
-  filter(depth_cm == STANDARD_DEPTHS[1], qa_realistic) %>%
+  filter(depth_cm_midpoint == STANDARD_DEPTHS[1], qa_realistic) %>%
   group_by(stratum) %>%
   summarise(
     mean_bd = mean(bd_harmonized),
@@ -1686,7 +1686,7 @@ for (i in 1:nrow(bd_summary)) {
 
 cat("\nCarbon Stock at VM0033 Surface Layer (7.5 cm) by Stratum:\n")
 stock_summary <- harmonized_cores %>%
-  filter(depth_cm == STANDARD_DEPTHS[1], qa_realistic) %>%
+  filter(depth_cm_midpoint == STANDARD_DEPTHS[1], qa_realistic) %>%
   group_by(stratum) %>%
   summarise(
     mean_stock = mean(carbon_stock_kg_m2),
