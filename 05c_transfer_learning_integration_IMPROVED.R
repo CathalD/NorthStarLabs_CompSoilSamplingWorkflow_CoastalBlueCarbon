@@ -73,62 +73,60 @@ cat(sprintf("✓ Loaded %d global harmonized samples from %d cores\n",
 cat(sprintf("✓ Loaded %d global samples with full covariates\n", nrow(global_full)))
 
 # ============================================================================
-# STEP 2: MERGE GLOBAL COVARIATES WITH HARMONIZED DATA  
+# STEP 2: PREPARE COMBINED DATA
 # ============================================================================
 
-cat("\nSTEP 2: Merging datasets and preparing combined data...\n\n")
+cat("\nSTEP 2: Preparing combined dataset...\n\n")
 
-# For global data: merge harmonized carbon stocks with covariates
-# Match on study_id, lat/lon, and depth
-# Extract study_id from core_id (format: GLOBAL_13_1)
-global_cores <- global_cores %>%
-  mutate(
-    study_id = as.numeric(str_extract(core_id, "(?<=GLOBAL_)\\d+"))
-  )
+# Check if global harmonized data already has covariates
+global_covariate_cols <- grep("^(topo_|wc_|gsw_|sg_|elevation_)", names(global_cores), value = TRUE)
 
-# Create matching key using location and depth
-global_cores <- global_cores %>%
-  mutate(
-    lat_round = round(latitude, 4),
-    lon_round = round(longitude, 4),
-    depth_round = round(depth_cm_midpoint, 1),
-    match_key = paste(study_id, lat_round, lon_round, depth_round, sep = "_")
-  )
+if (length(global_covariate_cols) > 0) {
+  # Module 03 already preserved covariates - use directly
+  cat(sprintf("✓ Global harmonized data already has %d covariates\n", length(global_covariate_cols)))
+  global_data <- global_cores
 
-# Extract coordinates from .geo JSON field in global_full FIRST
-# Note: GeoJSON format is [longitude, latitude]
-global_full <- global_full %>%
-  mutate(
-    lon_extract = as.numeric(str_extract(.geo, "(?<=\\[)-?\\d+\\.\\d+")),
-    lat_extract = as.numeric(str_extract(.geo, "(?<=,)-?\\d+\\.\\d+(?=\\])")),
-    lat_round = round(lat_extract, 4),
-    lon_round = round(lon_extract, 4),
-    depth_round = round(depth_cm, 1),
-    match_key = paste(study_id, lat_round, lon_round, depth_round, sep = "_")
-  )
+} else {
+  # Covariates not in harmonized data - need to merge from raw data
+  cat("⚠ Global harmonized data missing covariates - merging from raw data...\n")
 
-# Merge global harmonized with covariates
-# Don't remove columns in the select - keep everything
-global_merged <- global_cores %>%
-  left_join(
-    global_full,
-    by = "match_key",
-    suffix = c("", "_cov")
-  )
+  # Standardize column names in global_full
+  names(global_full) <- tolower(names(global_full))
 
-# Check merge success
-n_matched <- sum(!is.na(global_merged$study_id.y))
-cat(sprintf("✓ Successfully matched %d/%d global records with covariates (%.1f%%)\n", 
-            n_matched, nrow(global_merged), 100*n_matched/nrow(global_merged)))
+  # The harmonized data uses sample_id as core_id
+  # Match harmonized samples back to raw data by sample_id and depth
 
-# Clean up - keep core_id and harmonized carbon_stock_kg_m2 from global_cores
-global_data <- global_merged %>%
-  mutate(
-    study_id = coalesce(study_id.x, study_id.y)
-  ) %>%
-  select(-ends_with("_cov"), -study_id.x, -study_id.y, -match_key) %>%
-  # Remove duplicate columns
-  select(-any_of(c("carbon_stock_30cm", "carbon_stock_50cm", "carbon_stock_100cm")))
+  # First, extract sample_id from core_id if it's in GLOBAL_X format
+  if (all(grepl("^GLOBAL_", global_cores$core_id))) {
+    # Extract the numeric part after GLOBAL_
+    global_cores$sample_id_match <- as.numeric(str_extract(global_cores$core_id, "\\d+$"))
+  } else {
+    global_cores$sample_id_match <- global_cores$core_id
+  }
+
+  # Get unique sample IDs with their covariates (one row per core)
+  global_covariates <- global_full %>%
+    group_by(sample_id) %>%
+    slice(1) %>%
+    ungroup() %>%
+    select(sample_id, any_of(c("latitude", "longitude", "study_id", "ecosystem")),
+           matches("^(topo_|wc_|gsw_|sg_|elevation_)"))
+
+  # Merge covariates with harmonized data
+  global_data <- global_cores %>%
+    left_join(global_covariates, by = c("sample_id_match" = "sample_id"),
+              suffix = c("", "_raw")) %>%
+    # Use harmonized lat/lon if available, otherwise use from raw
+    mutate(
+      latitude = coalesce(latitude, latitude_raw),
+      longitude = coalesce(longitude, longitude_raw)
+    ) %>%
+    select(-contains("_raw"), -sample_id_match)
+
+  n_matched <- sum(!is.na(global_data[[global_covariate_cols[1]]]))
+  cat(sprintf("✓ Successfully matched %d/%d global records with covariates\n",
+              n_matched, nrow(global_data)))
+}
 
 # Add data source indicators
 local_cores$data_source <- "local"
