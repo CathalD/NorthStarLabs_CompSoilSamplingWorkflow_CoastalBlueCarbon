@@ -1462,10 +1462,22 @@ if (length(global_data_files) > 0) {
     # Prepare for harmonization - need core_id, depth, soc, bd
     global_cores_prep <- global_cores_raw
 
-    # Store core-level metadata BEFORE processing
+    # Store core-level metadata BEFORE processing (including all covariates)
+    # Get all columns that are constant per core (not depth-specific)
+    depth_specific_cols <- c("depth_min", "depth_max", "depth_top_cm", "depth_bottom_cm",
+                            "depth_cm", "depth_cm_midpoint", "layer_thickness_cm",
+                            "soc_percent", "soc_g_kg", "bd_g_cm3", "bulk_density",
+                            "carbon_density_c", "carbon_density_om", "carbon_density_gpercm3",
+                            "carbon_stock_kg_m2", "percom", "perc_c_om", "perc_c_c",
+                            "subsampid", "subsample_id", "sample_length")
+
+    covariate_cols <- setdiff(names(global_cores_raw), depth_specific_cols)
+
     core_metadata <- global_cores_raw %>%
-      select(any_of(c("sample_id", "core_id", "latitude", "longitude", "ecosystem", "site"))) %>%
-      distinct()
+      select(any_of(c("sample_id", "core_id", covariate_cols))) %>%
+      group_by(across(any_of(c("sample_id", "core_id")))) %>%
+      slice(1) %>%  # Take first row per core
+      ungroup()
 
     # Standardize core_id column
     if ("core_id" %in% names(global_cores_prep)) {
@@ -1609,18 +1621,29 @@ if (length(global_data_files) > 0) {
             left_join(core_metadata_unique, by = "core_id")
         }
 
-        # Standardize column names to match local harmonized dataset
-        # Keep only essential columns for merging with local data
-        essential_cols <- c("core_id", "depth_cm_midpoint", "soc_harmonized",
-                           "bd_harmonized", "carbon_stock_kg_m2",
-                           "latitude", "longitude", "ecosystem")
+        # Keep essential columns PLUS all covariates
+        # Priority columns come first for easier viewing
+        priority_cols <- c("core_id", "depth_cm_midpoint", "depth_cm",
+                          "soc_harmonized", "bd_harmonized", "carbon_stock_kg_m2",
+                          "latitude", "longitude", "ecosystem")
 
+        # Get all other columns (covariates)
+        other_cols <- setdiff(names(global_harmonized), priority_cols)
+
+        # Reorder columns: priority first, then covariates
         global_harmonized <- global_harmonized %>%
-          select(any_of(essential_cols))
+          select(any_of(c(priority_cols, other_cols)))
 
-        log_message(sprintf("  Standardized to %d columns: %s",
-                           ncol(global_harmonized),
-                           paste(names(global_harmonized), collapse = ", ")))
+        log_message(sprintf("  Retained %d columns (including covariates)", ncol(global_harmonized)))
+        log_message(sprintf("  Priority cols: %s",
+                           paste(intersect(priority_cols, names(global_harmonized)), collapse = ", ")))
+
+        # Count covariate columns
+        n_covariates <- sum(grepl("^(gsw_|sg_|topo_|wc_|elevation|grain|veg_|ecoregion)",
+                                  names(global_harmonized)))
+        if (n_covariates > 0) {
+          log_message(sprintf("  Covariates: %d columns preserved", n_covariates))
+        }
 
         # Save harmonized global data
         saveRDS(global_harmonized, "data_processed/global_cores_harmonized_VM0033.rds")
