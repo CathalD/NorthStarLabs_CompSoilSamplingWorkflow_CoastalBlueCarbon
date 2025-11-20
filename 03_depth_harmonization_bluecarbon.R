@@ -1246,10 +1246,12 @@ log_message("Saved mean profile comparison plots")
 
 log_message("Saving harmonized data...")
 
-# Save harmonized cores
+# Save harmonized cores (full version with all columns)
 saveRDS(harmonized_cores, "data_processed/cores_harmonized_bluecarbon.rds")
 write.csv(harmonized_cores, "data_processed/cores_harmonized_bluecarbon.csv",
           row.names = FALSE)
+
+log_message(sprintf("Saved harmonized cores with %d columns", ncol(harmonized_cores)))
 
 # Save diagnostics
 saveRDS(diagnostics_df, "diagnostics/harmonization_diagnostics.rds")
@@ -1305,14 +1307,31 @@ if (length(global_data_files) > 0) {
     # Prepare for harmonization - need core_id, depth, soc, bd
     global_cores_prep <- global_cores_raw
 
-    # Detect/create core_id
+    # Store core-level metadata BEFORE processing
+    core_metadata <- global_cores_raw %>%
+      select(any_of(c("sample_id", "core_id", "latitude", "longitude", "ecosystem", "site"))) %>%
+      distinct()
+
+    # Standardize core_id column
     if ("core_id" %in% names(global_cores_prep)) {
-      # Already has core_id
+      core_id_col <- "core_id"
     } else if ("sample_id" %in% names(global_cores_prep)) {
       global_cores_prep$core_id <- global_cores_prep$sample_id
+      core_metadata$core_id <- core_metadata$sample_id
+      core_id_col <- "core_id"
     } else {
-      # Create core_id from row numbers
-      global_cores_prep$core_id <- paste0("GLOBAL_", 1:nrow(global_cores_prep))
+      # Create unique core IDs - but group by location if available
+      if (all(c("latitude", "longitude") %in% names(global_cores_prep))) {
+        global_cores_prep <- global_cores_prep %>%
+          group_by(latitude, longitude) %>%
+          mutate(core_id = paste0("GLOBAL_", cur_group_id())) %>%
+          ungroup()
+        core_metadata$core_id <- unique(global_cores_prep$core_id)
+      } else {
+        global_cores_prep$core_id <- paste0("GLOBAL_", 1:nrow(global_cores_prep))
+        core_metadata$core_id <- global_cores_prep$core_id
+      }
+      core_id_col <- "core_id"
     }
 
     # Try to detect depth midpoint or calculate it
@@ -1410,23 +1429,36 @@ if (length(global_data_files) > 0) {
       if (length(global_harmonized_list) > 0) {
         global_harmonized <- bind_rows(global_harmonized_list)
 
-        # Add back metadata columns if they exist
-        # Use global_cores_prep (which has core_id standardized) not global_cores_raw
-        metadata_cols <- setdiff(names(global_cores_prep),
-                                c(depth_cols, carbon_cols, bd_cols, "depth_cm_midpoint"))
+        log_message(sprintf("✓ Combined %d harmonized samples from global cores",
+                           nrow(global_harmonized)))
 
-        if (length(metadata_cols) > 0) {
-          # Get unique metadata per core from the prepared dataset
-          global_metadata <- global_cores_prep %>%
-            distinct(core_id, .keep_all = TRUE) %>%
-            select(any_of(c("core_id", "latitude", "longitude", "ecosystem", "site", "stratum")))
+        # Merge with core metadata (latitude, longitude, etc)
+        if (nrow(core_metadata) > 0 && "core_id" %in% names(core_metadata)) {
+          # Make sure core_metadata has unique core_id values
+          core_metadata_unique <- core_metadata %>%
+            group_by(core_id) %>%
+            slice(1) %>%  # Take first occurrence of each core
+            ungroup()
 
-          # Only join if global_metadata has core_id
-          if ("core_id" %in% names(global_metadata)) {
-            global_harmonized <- global_harmonized %>%
-              left_join(global_metadata, by = "core_id")
-          }
+          log_message(sprintf("  Merging metadata for %d unique cores",
+                             nrow(core_metadata_unique)))
+
+          global_harmonized <- global_harmonized %>%
+            left_join(core_metadata_unique, by = "core_id")
         }
+
+        # Standardize column names to match local harmonized dataset
+        # Keep only essential columns for merging with local data
+        essential_cols <- c("core_id", "depth_cm_midpoint", "soc_harmonized",
+                           "bd_harmonized", "carbon_stock_kg_m2",
+                           "latitude", "longitude", "ecosystem")
+
+        global_harmonized <- global_harmonized %>%
+          select(any_of(essential_cols))
+
+        log_message(sprintf("  Standardized to %d columns: %s",
+                           ncol(global_harmonized),
+                           paste(names(global_harmonized), collapse = ", ")))
 
         # Save harmonized global data
         saveRDS(global_harmonized, "data_processed/global_cores_harmonized_VM0033.rds")
@@ -1435,7 +1467,8 @@ if (length(global_data_files) > 0) {
 
         log_message(sprintf("✓ Harmonized %d global cores to VM0033 depths",
                            n_distinct(global_harmonized$core_id)))
-        log_message("  Saved to: data_processed/global_cores_harmonized_VM0033.csv")
+        log_message(sprintf("  Saved: %d samples at 4 depths", nrow(global_harmonized)))
+        log_message("  File: data_processed/global_cores_harmonized_VM0033.csv")
 
       } else {
         log_message("No global cores could be harmonized", "WARNING")
