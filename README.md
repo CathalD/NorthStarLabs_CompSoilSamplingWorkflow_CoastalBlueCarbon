@@ -933,3 +933,7 @@ If you use this workflow, please cite:
 ---
 
 *For technical support, see module-specific documentation in script headers. For VM0033 compliance questions, consult Verra methodology document.*
+
+
+## OpenCarbon Python MVP
+See `README_OpenCarbon.md` for the drone + satellite carbon calculator scaffold.
